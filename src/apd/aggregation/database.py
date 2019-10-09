@@ -8,23 +8,25 @@ Base = declarative_base()
 
 
 class DataPoint(Base):
-    __tablename__ = 'sensor_values'
+    __tablename__ = "sensor_values"
     id = sqlalchemy.Column(sqlalchemy.Integer, primary_key=True)
     sensor_name = sqlalchemy.Column(sqlalchemy.String)
-    #sensor_version = sqlalchemy.Column(sqlalchemy.String)
+    # sensor_version = sqlalchemy.Column(sqlalchemy.String)
     collected_at = sqlalchemy.Column(TIMESTAMP)
     data = sqlalchemy.Column(JSONB)
 
 
-
 def main():
-    engine = sqlalchemy.create_engine("postgresql+psycopg2://apd@localhost/apd", echo=True)
+    engine = sqlalchemy.create_engine(
+        "postgresql+psycopg2://apd@localhost/apd", echo=True
+    )
     sm = sessionmaker(engine)
     Session = sm()
     if False:
-        Base.metadata.create_all(engine) 
+        Base.metadata.create_all(engine)
     print(Session.query(DataPoint).all())
     pass
+
 
 if __name__ == "__main__":
     main()
