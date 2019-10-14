@@ -8,10 +8,9 @@ Base = declarative_base()
 
 
 class DataPoint(Base):
-    __tablename__ = "sensor_values"
+    __tablename__ = "datapoints"
     id = sqlalchemy.Column(sqlalchemy.Integer, primary_key=True)
     sensor_name = sqlalchemy.Column(sqlalchemy.String)
-    # sensor_version = sqlalchemy.Column(sqlalchemy.String)
     collected_at = sqlalchemy.Column(TIMESTAMP)
     data = sqlalchemy.Column(JSONB)
 
