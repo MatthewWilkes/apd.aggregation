@@ -1,4 +1,5 @@
 import datetime
+from concurrent.futures import ThreadPoolExecutor, Future
 import typing as t
 
 import requests
@@ -9,7 +10,7 @@ from sqlalchemy.orm.session import Session
 from .database import DataPoint
 
 
-def get_data_points(server: str, api_key: t.Optional[str]) -> t.Iterable[DataPoint]:
+def get_data_points(server: str, api_key: t.Optional[str]) -> t.List[DataPoint]:
     if not server.endswith("/"):
         server += "/"
     url = server + "v/2.0/sensors/"
@@ -22,10 +23,14 @@ def get_data_points(server: str, api_key: t.Optional[str]) -> t.Iterable[DataPoi
         raise ValueError(f"Error connecting to {server}")
     now = datetime.datetime.now()
     if result.ok:
+        points = []
         for value in result.json()["sensors"]:
-            yield DataPoint(
-                sensor_name=value["id"], collected_at=now, data=value["value"]
+            points.append(
+                DataPoint(
+                    sensor_name=value["id"], collected_at=now, data=value["value"]
+                )
             )
+        return points
     else:
         raise ValueError(
             f"Error loading data from {server}: "
@@ -33,14 +38,26 @@ def get_data_points(server: str, api_key: t.Optional[str]) -> t.Iterable[DataPoi
         )
 
 
+def handle_result(execution: Future, session: Session) -> t.List[DataPoint]:
+    points: t.List[DataPoint] = []
+    result = execution.result()
+    for point in result:
+        session.add(point)
+        points.append(point)
+    return points
+
+
 def add_data_from_sensors(
     session: Session, servers: t.Tuple[str], api_key: t.Optional[str]
-) -> t.Iterable[DataPoint]:
+) -> t.List[DataPoint]:
+    threads: t.List[Future] = []
     points: t.List[DataPoint] = []
-    for server in servers:
-        for point in get_data_points(server, api_key):
-            session.add(point)
-            points.append(point)
+    with ThreadPoolExecutor() as pool:
+        for server in servers:
+            points_future = pool.submit(get_data_points, server, api_key)
+            threads.append(points_future)
+    for thread in threads:
+        points += handle_result(thread, session)
     return points
 
 
