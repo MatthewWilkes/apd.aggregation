@@ -1,14 +1,14 @@
 import datetime
 import typing as t
- 
+
 import requests
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm.session import Session
- 
+
 from .database import DataPoint
- 
- 
+
+
 def get_data_points(server: str, api_key: t.Optional[str]) -> t.Iterable[DataPoint]:
     if not server.endswith("/"):
         server += "/"
@@ -18,7 +18,7 @@ def get_data_points(server: str, api_key: t.Optional[str]) -> t.Iterable[DataPoi
         headers["X-API-KEY"] = api_key
     try:
         result = requests.get(url, headers=headers)
-    except requests.ConnectionError as e:
+    except requests.ConnectionError:
         raise ValueError(f"Error connecting to {server}")
     now = datetime.datetime.now()
     if result.ok:
@@ -31,8 +31,8 @@ def get_data_points(server: str, api_key: t.Optional[str]) -> t.Iterable[DataPoi
             f"Error loading data from {server}: "
             + result.json().get("error", "Unknown")
         )
- 
- 
+
+
 def add_data_from_sensors(
     session: Session, servers: t.Tuple[str], api_key: t.Optional[str]
 ) -> t.Iterable[DataPoint]:
@@ -42,8 +42,8 @@ def add_data_from_sensors(
             session.add(point)
             points.append(point)
     return points
- 
- 
+
+
 def standalone(
     db_uri: str, servers: t.Tuple[str], api_key: t.Optional[str], echo: bool = False
 ) -> None:
@@ -52,12 +52,11 @@ def standalone(
     Session = sm()
     add_data_from_sensors(Session, servers, api_key)
     Session.commit()
- 
- 
+
+
 if __name__ == "__main__":
     standalone(
         db_uri="postgresql+psycopg2://apd@localhost/apd",
         servers=("http://pvoutput:8080/",),
         api_key="h3hdfjksfhwkjehnwekj",
     )
-    
