@@ -1,8 +1,8 @@
+import asyncio
 import datetime
-from concurrent.futures import ThreadPoolExecutor, Future
 import typing as t
 
-import requests
+import aiohttp
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm.session import Session
@@ -10,21 +10,22 @@ from sqlalchemy.orm.session import Session
 from .database import DataPoint
 
 
-def get_data_points(server: str, api_key: t.Optional[str]) -> t.List[DataPoint]:
+async def get_data_points(
+    server: str, api_key: t.Optional[str], http: aiohttp.ClientSession
+) -> t.List[DataPoint]:
     if not server.endswith("/"):
         server += "/"
     url = server + "v/2.0/sensors/"
     headers = {}
     if api_key:
         headers["X-API-KEY"] = api_key
-    try:
-        result = requests.get(url, headers=headers)
-    except requests.ConnectionError:
-        raise ValueError(f"Error connecting to {server}")
+    async with http.get(url) as request:
+        result = await request.json()
+        ok = request.status == 200
     now = datetime.datetime.now()
-    if result.ok:
+    if ok:
         points = []
-        for value in result.json()["sensors"]:
+        for value in result["sensors"]:
             points.append(
                 DataPoint(
                     sensor_name=value["id"], collected_at=now, data=value["value"]
@@ -38,26 +39,24 @@ def get_data_points(server: str, api_key: t.Optional[str]) -> t.List[DataPoint]:
         )
 
 
-def handle_result(execution: Future, session: Session) -> t.List[DataPoint]:
-    points: t.List[DataPoint] = []
-    result = execution.result()
+async def handle_result(
+    result: t.List[DataPoint], session: Session
+) -> t.List[DataPoint]:
     for point in result:
         session.add(point)
-        points.append(point)
-    return points
+    return result
 
 
-def add_data_from_sensors(
+async def add_data_from_sensors(
     session: Session, servers: t.Tuple[str], api_key: t.Optional[str]
 ) -> t.List[DataPoint]:
-    threads: t.List[Future] = []
+    tasks: t.List[t.Awaitable[t.List[DataPoint]]] = []
     points: t.List[DataPoint] = []
-    with ThreadPoolExecutor() as pool:
+    async with aiohttp.ClientSession() as http:
         for server in servers:
-            points_future = pool.submit(get_data_points, server, api_key)
-            threads.append(points_future)
-    for thread in threads:
-        points += handle_result(thread, session)
+            tasks.append(get_data_points(server, api_key, http))
+        for a in await asyncio.gather(*tasks):
+            points += await handle_result(a, session)
     return points
 
 
@@ -67,7 +66,7 @@ def standalone(
     engine = create_engine(db_uri, echo=echo)
     sm = sessionmaker(engine)
     Session = sm()
-    add_data_from_sensors(Session, servers, api_key)
+    asyncio.run(add_data_from_sensors(Session, servers, api_key))
     Session.commit()
 
 
