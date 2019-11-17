@@ -12,6 +12,7 @@ black = "*"
 pre-commit = "*"
 wheel = "*"
 twine = "*"
+sqlalchemy-stubs = "*"
 
 [packages]
 apd-aggregation = {editable = true,path = "."}
