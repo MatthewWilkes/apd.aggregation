@@ -16,6 +16,7 @@ sqlalchemy-stubs = "*"
 
 [packages]
 apd-aggregation = {editable = true,path = "."}
+apd-sensors = {editable = true,extras = ["webapp"],path = "./../code"}
 
 [requires]
 
