@@ -19,7 +19,7 @@ async def get_data_points(
     headers = {}
     if api_key:
         headers["X-API-KEY"] = api_key
-    async with http.get(url) as request:
+    async with http.get(url, headers=headers) as request:
         result = await request.json()
         ok = request.status == 200
     now = datetime.datetime.now()
@@ -34,8 +34,7 @@ async def get_data_points(
         return points
     else:
         raise ValueError(
-            f"Error loading data from {server}: "
-            + result.json().get("error", "Unknown")
+            f"Error loading data from {server}: " + result.get("error", "Unknown")
         )
 
 
