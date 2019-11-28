@@ -68,11 +68,9 @@ class TestGetDataPoints:
 
     @pytest.fixture(scope="session")
     def http_server(self):
-        print("Set up class")
         yield from run_server_in_thread(
             "standard", {"APD_SENSORS_API_KEY": "testing"}, 12081
         )
-        print("Tear down c;ass")
 
     @pytest.mark.asyncio
     async def test_get_data_points(
