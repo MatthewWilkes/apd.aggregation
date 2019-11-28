@@ -15,6 +15,8 @@ from apd.sensors.wsgi import v20
 
 from apd.aggregation import collect
 
+pytestmark = [pytest.mark.functional]
+
 
 @pytest.fixture
 def sensors() -> t.Iterator[t.List[Sensor[t.Any]]]:
