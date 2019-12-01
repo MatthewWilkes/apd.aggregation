@@ -1,18 +1,44 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, field, asdict
+import datetime
+import typing as t
+
 import sqlalchemy
-from sqlalchemy.ext.declarative import declarative_base
+import sqlalchemy.util._collections
 from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.schema import Table
 
 
-Base = declarative_base()
+metadata = sqlalchemy.MetaData()
+
+datapoint_table = Table(
+    "datapoints",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("sensor_name", sqlalchemy.String),
+    sqlalchemy.Column("collected_at", TIMESTAMP),
+    sqlalchemy.Column("data", JSONB),
+)
 
 
-class DataPoint(Base):
-    __tablename__ = "datapoints"
-    id = sqlalchemy.Column(sqlalchemy.Integer, primary_key=True)
-    sensor_name = sqlalchemy.Column(sqlalchemy.String)
-    collected_at = sqlalchemy.Column(TIMESTAMP)
-    data = sqlalchemy.Column(JSONB)
+@dataclass
+class DataPoint:
+    sensor_name: str
+    data: t.Dict[str, t.Any]
+    id: t.Optional[int] = None
+    collected_at: datetime.datetime = field(default_factory=datetime.datetime.now)
+
+    @classmethod
+    def from_sql_result(cls, result) -> DataPoint:
+        return cls(**result._asdict())
+
+    def _asdict(self) -> t.Dict[str, t.Any]:
+        data = asdict(self)
+        if data["id"] is None:
+            del data["id"]
+        return data
 
 
 def main():
@@ -22,7 +48,7 @@ def main():
     sm = sessionmaker(engine)
     Session = sm()
     if False:
-        Base.metadata.create_all(engine)
+        metadata.create_all(engine)
     print(Session.query(DataPoint).all())
     pass
 
