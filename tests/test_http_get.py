@@ -118,7 +118,7 @@ class TestAddDataFromSensors:
         self, mock_db_session, sensors: t.List[Sensor[t.Any]], mut, http_server: str
     ) -> None:
         results = await mut(mock_db_session, [http_server], "testing")
-        assert mock_db_session.add.call_count == len(sensors)
+        assert mock_db_session.execute.call_count == len(sensors)
         assert len(results) == len(sensors)
 
     @pytest.mark.asyncio
@@ -126,7 +126,7 @@ class TestAddDataFromSensors:
         self, mock_db_session, sensors: t.List[Sensor[t.Any]], mut, http_server: str
     ) -> None:
         results = await mut(mock_db_session, [http_server, http_server], "testing")
-        assert mock_db_session.add.call_count == len(sensors) * 2
+        assert mock_db_session.execute.call_count == len(sensors) * 2
         assert len(results) == len(sensors) * 2
 
     @pytest.mark.asyncio
@@ -145,4 +145,4 @@ class TestAddDataFromSensors:
             await mut(
                 mock_db_session, [http_server, bad_api_key_http_server], "testing"
             )
-        assert mock_db_session.add.call_count == 0
+        assert mock_db_session.execute.call_count == 0
