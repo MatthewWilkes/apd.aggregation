@@ -22,6 +22,15 @@ datapoint_table = Table(
     sqlalchemy.Column("data", JSONB),
 )
 
+daily_summary_view = Table(
+    "daily_summary",
+    metadata,
+    sqlalchemy.Column("sensor_name", sqlalchemy.String),
+    sqlalchemy.Column("data", JSONB),
+    sqlalchemy.Column("count", sqlalchemy.Integer),
+    info={"is_view": True},
+)
+
 
 class DateEqualComparator(ExprComparator):
     def __init__(self, fallback_expression, raw_expression):
