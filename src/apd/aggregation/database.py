@@ -3,9 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field, asdict
 import datetime
 import typing as t
+import uuid
 
 import sqlalchemy
-from sqlalchemy.dialects.postgresql import JSONB, DATE, TIMESTAMP
+from sqlalchemy.dialects.postgresql import JSONB, DATE, TIMESTAMP, UUID
 from sqlalchemy.ext.hybrid import ExprComparator, hybrid_property
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.schema import Table
@@ -19,6 +20,7 @@ datapoint_table = Table(
     sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
     sqlalchemy.Column("sensor_name", sqlalchemy.String, index=True),
     sqlalchemy.Column("collected_at", TIMESTAMP, index=True),
+    sqlalchemy.Column("deployment_id", UUID(as_uuid=True), index=True),
     sqlalchemy.Column("data", JSONB),
 )
 
@@ -58,6 +60,7 @@ class DateEqualComparator(ExprComparator):
 class DataPoint:
     sensor_name: str
     data: t.Dict[str, t.Any]
+    deployment_id: uuid.UUID
     id: t.Optional[int] = None
     collected_at: datetime.datetime = field(default_factory=datetime.datetime.now)
 

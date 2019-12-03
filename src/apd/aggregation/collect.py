@@ -1,6 +1,8 @@
 import asyncio
+from contextvars import ContextVar
 import datetime
 import typing as t
+import uuid
 
 import aiohttp
 from sqlalchemy import create_engine
@@ -9,16 +11,25 @@ from sqlalchemy.orm.session import Session
 
 from .database import DataPoint, datapoint_table
 
+http_session_var: ContextVar[aiohttp.ClientSession] = ContextVar("http_session")
 
-async def get_data_points(
-    server: str, api_key: t.Optional[str], http: aiohttp.ClientSession
-) -> t.List[DataPoint]:
+
+async def get_data_points(server: str, api_key: t.Optional[str],) -> t.List[DataPoint]:
     if not server.endswith("/"):
         server += "/"
-    url = server + "v/2.0/sensors/"
+    url = server + "v/2.1/sensors/"
+    deployment_id_url = server + "v/2.1/deployment_id"
     headers = {}
     if api_key:
         headers["X-API-KEY"] = api_key
+    http = http_session_var.get()
+
+    async with http.get(deployment_id_url) as request:
+        if request.status != 200:
+            raise ValueError(f"Error loading deployment id from {server}")
+        result = await request.json()
+        deployment_id = uuid.UUID(result["deployment_id"])
+
     async with http.get(url, headers=headers) as request:
         result = await request.json()
         ok = request.status == 200
@@ -28,7 +39,10 @@ async def get_data_points(
         for value in result["sensors"]:
             points.append(
                 DataPoint(
-                    sensor_name=value["id"], collected_at=now, data=value["value"]
+                    sensor_name=value["id"],
+                    collected_at=now,
+                    data=value["value"],
+                    deployment_id=deployment_id,
                 )
             )
         return points
@@ -52,7 +66,8 @@ async def add_data_from_sensors(
     tasks: t.List[t.Awaitable[t.List[DataPoint]]] = []
     points: t.List[DataPoint] = []
     async with aiohttp.ClientSession() as http:
-        tasks = [get_data_points(server, api_key, http) for server in servers]
+        http_session_var.set(http)
+        tasks = [get_data_points(server, api_key) for server in servers]
         for results in await asyncio.gather(*tasks):
             points += results
     loop = asyncio.get_running_loop()
