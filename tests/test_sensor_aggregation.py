@@ -60,7 +60,14 @@ class FakeAIOHttpResponse:
 
 @pytest.fixture
 def mockclient(data) -> FakeAIOHttpClient:
-    return FakeAIOHttpClient({"http://localhost/v/2.0/sensors/": json.dumps(data)})
+    return FakeAIOHttpClient(
+        {
+            "http://localhost/v/2.1/sensors/": json.dumps(data),
+            "http://localhost/v/2.1/deployment_id": json.dumps(
+                {"deployment_id": "b29ba0ee10f14552b6b21327bb96d3fb"}
+            ),
+        }
+    )
 
 
 class TestGetDataPoints:
@@ -72,7 +79,11 @@ class TestGetDataPoints:
     async def test_get_data_points(
         self, mut, mockclient: FakeAIOHttpClient, data
     ) -> None:
-        datapoints = await mut("http://localhost", "", mockclient)
+        token = apd.aggregation.collect.http_session_var.set(mockclient)
+        try:
+            datapoints = await mut("http://localhost", "")
+        finally:
+            apd.aggregation.collect.http_session_var.reset(token)
 
         assert len(datapoints) == len(data["sensors"])
         for sensor in data["sensors"]:
@@ -159,6 +170,10 @@ class TestDatabaseConnection:
     @pytest.fixture
     def model(self):
         return apd.aggregation.database.DataPoint
+
+    @pytest.fixture
+    def mut(self):
+        return apd.aggregation.collect.add_data_from_sensors
 
     @pytest.mark.asyncio
     async def test_datapoints_are_added_to_the_session(self, db_session, table) -> None:

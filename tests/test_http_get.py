@@ -11,7 +11,7 @@ from apd.sensors.wsgi import set_up_config
 import flask
 import pytest
 
-from apd.sensors.wsgi import v20
+from apd.sensors.wsgi import v21
 
 from apd.aggregation import collect
 
@@ -31,7 +31,7 @@ def get_independent_flask_app(name: str) -> flask.Flask:
     """ Create a new flask app with the v20 API blueprint loaded, so multiple copies
     of the app can be run in parallel without conflicting configuration """
     app = flask.Flask(name)
-    app.register_blueprint(v20.version, url_prefix="/v/2.0")
+    app.register_blueprint(v21.version, url_prefix="/v/2.1")
     return app
 
 
@@ -52,14 +52,24 @@ def run_server_in_thread(
 @pytest.fixture(scope="module")
 def http_server():
     yield from run_server_in_thread(
-        "standard", {"APD_SENSORS_API_KEY": "testing"}, 12081
+        "standard",
+        {
+            "APD_SENSORS_API_KEY": "testing",
+            "APD_SENSORS_DEPLOYMENT_ID": "a46b1d1207fd4cdcad39bbdf706dfe29",
+        },
+        12081,
     )
 
 
 @pytest.fixture(scope="module")
 def bad_api_key_http_server():
     yield from run_server_in_thread(
-        "alternate", {"APD_SENSORS_API_KEY": "penny"}, 12082
+        "alternate",
+        {
+            "APD_SENSORS_API_KEY": "penny",
+            "APD_SENSORS_DEPLOYMENT_ID": "38cf2bae9adb445fad946c82e290487a",
+        },
+        12082,
     )
 
 
@@ -68,12 +78,6 @@ class TestGetDataPoints:
     def mut(self):
         return collect.get_data_points
 
-    @pytest.fixture(scope="session")
-    def http_server(self):
-        yield from run_server_in_thread(
-            "standard", {"APD_SENSORS_API_KEY": "testing"}, 12081
-        )
-
     @pytest.mark.asyncio
     async def test_get_data_points(
         self, sensors: t.List[Sensor[t.Any]], mut, http_server: str
@@ -81,8 +85,9 @@ class TestGetDataPoints:
         # Get the data from the server, storing the time before and after
         # as bounds for the collected_at value
         async with aiohttp.ClientSession() as http:
+            collect.http_session_var.set(http)
             time_before = datetime.datetime.now()
-            results = await mut(http_server, "testing", http)
+            results = await mut(http_server, "testing")
             time_after = datetime.datetime.now()
 
         assert len(results) == len(sensors) == 2
@@ -101,7 +106,8 @@ class TestGetDataPoints:
             match=f"Error loading data from {http_server}: Supply API key in X-API-Key header",
         ):
             async with aiohttp.ClientSession() as http:
-                await mut(http_server, "incorrect", http)
+                collect.http_session_var.set(http)
+                await mut(http_server, "incorrect")
 
 
 class TestAddDataFromSensors:
