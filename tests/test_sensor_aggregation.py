@@ -6,7 +6,11 @@ import json
 import typing as t
 from unittest.mock import patch, Mock
 
+from alembic.config import Config
+from alembic.script import ScriptDirectory
+from alembic.runtime.environment import EnvironmentContext
 import pytest
+import sqlalchemy
 
 import apd.aggregation.collect
 
@@ -107,14 +111,32 @@ class TestDatabaseConnection:
         return "postgresql+psycopg2://apd@localhost/apd-test"
 
     @pytest.fixture
-    def db_session(self, db_uri):
+    def migrated_db(self, db_uri):
+        config = Config()
+        config.set_main_option("script_location", "apd.aggregation:alembic")
+        config.set_main_option("sqlalchemy.url", db_uri)
+        script = ScriptDirectory.from_config(config)
+
+        def upgrade(rev, context):
+            return script._upgrade_revs(script.get_current_head(), rev)
+
+        def downgrade(rev, context):
+            return script._downgrade_revs(None, rev)
+
+        with EnvironmentContext(config, script, fn=upgrade):
+            script.run_env()
+
+        yield
+
+        with EnvironmentContext(config, script, fn=downgrade):
+            script.run_env()
+
+    @pytest.fixture
+    def db_session(self, migrated_db, db_uri):
         from sqlalchemy import create_engine
         from sqlalchemy.orm import sessionmaker
-        from apd.aggregation.database import metadata
 
         engine = create_engine(db_uri, echo=True)
-        metadata.drop_all(engine)
-        metadata.create_all(engine)
         sm = sessionmaker(engine)
         Session = sm()
         yield Session
@@ -127,22 +149,22 @@ class TestDatabaseConnection:
             yield ClientSession
 
     @pytest.fixture
-    def mut(self):
-        return apd.aggregation.collect.add_data_from_sensors
-
-    @pytest.fixture
     def table(self):
         return apd.aggregation.database.datapoint_table
+
+    @pytest.fixture
+    def daily_summary_view(self):
+        return apd.aggregation.database.daily_summary_view
 
     @pytest.fixture
     def model(self):
         return apd.aggregation.database.DataPoint
 
     @pytest.mark.asyncio
-    async def test_datapoints_are_added_to_the_session(
-        self, mut, db_session, table
-    ) -> None:
-        datapoints = await mut(db_session, ["http://localhost"], "")
+    async def test_datapoints_are_added_to_the_session(self, db_session, table) -> None:
+        datapoints = await apd.aggregation.collect.add_data_from_sensors(
+            db_session, ["http://localhost"], ""
+        )
         num_points = db_session.query(table).count()
         assert num_points == len(datapoints) == 2
 
@@ -155,3 +177,21 @@ class TestDatabaseConnection:
             model.from_sql_result(result) for result in db_session.query(table)
         ]
         assert db_points == datapoints
+
+    @pytest.mark.asyncio
+    async def test_daily_summary_view_matches_query(
+        self, db_session, model, table, daily_summary_view
+    ) -> None:
+        await apd.aggregation.collect.add_data_from_sensors(
+            db_session, ["http://localhost"], ""
+        )
+
+        headers = table.c.sensor_name, table.c.data
+        value_counts = (
+            db_session.query(*headers, sqlalchemy.func.count(table.c.id))
+            .filter(model.collected_on_date == sqlalchemy.func.current_date())
+            .group_by(*headers)
+        )
+
+        daily_summary_view = db_session.query(daily_summary_view)
+        assert value_counts.all() == daily_summary_view.all()
