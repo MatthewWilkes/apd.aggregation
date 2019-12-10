@@ -6,9 +6,6 @@ import json
 import typing as t
 from unittest.mock import patch, Mock
 
-from alembic.config import Config
-from alembic.script import ScriptDirectory
-from alembic.runtime.environment import EnvironmentContext
 import pytest
 import sqlalchemy
 
@@ -116,43 +113,8 @@ class TestAddDataFromSensors:
         assert db_session.execute.call_count == len(datapoints)
 
 
+@pytest.mark.usefixtures("migrated_db")
 class TestDatabaseConnection:
-    @pytest.fixture
-    def db_uri(self):
-        return "postgresql+psycopg2://apd@localhost/apd-test"
-
-    @pytest.fixture
-    def migrated_db(self, db_uri):
-        config = Config()
-        config.set_main_option("script_location", "apd.aggregation:alembic")
-        config.set_main_option("sqlalchemy.url", db_uri)
-        script = ScriptDirectory.from_config(config)
-
-        def upgrade(rev, context):
-            return script._upgrade_revs(script.get_current_head(), rev)
-
-        def downgrade(rev, context):
-            return script._downgrade_revs(None, rev)
-
-        with EnvironmentContext(config, script, fn=upgrade):
-            script.run_env()
-
-        yield
-
-        with EnvironmentContext(config, script, fn=downgrade):
-            script.run_env()
-
-    @pytest.fixture
-    def db_session(self, migrated_db, db_uri):
-        from sqlalchemy import create_engine
-        from sqlalchemy.orm import sessionmaker
-
-        engine = create_engine(db_uri, echo=True)
-        sm = sessionmaker(engine)
-        Session = sm()
-        yield Session
-        Session.close()
-
     @pytest.fixture(autouse=True)
     def patch_aiohttp(self, mockclient):
         with patch("aiohttp.ClientSession") as ClientSession:
