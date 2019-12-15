@@ -22,6 +22,13 @@ class Config:
     ylabel: str
 
 
+async def clean_watthours_to_watts(
+    datapoints: t.AsyncIterator[DataPoint],
+) -> t.AsyncIterator[t.Tuple[datetime.datetime, float]]:
+    async for date, data in clean_magnitude(datapoints):
+        yield (date, data)
+
+
 async def clean_magnitude(
     datapoints: t.AsyncIterator[DataPoint],
 ) -> t.AsyncIterator[t.Tuple[datetime.datetime, float]]:
@@ -92,9 +99,9 @@ async def clean_passthrough(
 configs = (
     Config(
         sensor_name="SolarCumulativeOutput",
-        clean=clean_magnitude,
-        title="Solar cumulative output",
-        ylabel="Watt-hours",
+        clean=clean_watthours_to_watts,
+        title="Solar generation",
+        ylabel="Watts",
     ),
     Config(
         sensor_name="RAMAvailable",

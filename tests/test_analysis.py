@@ -184,3 +184,58 @@ class TestTemperatureCleaner:
             (datetime.datetime(2020, 4, 1, 12, 0, 0), 31.0),
             (datetime.datetime(2020, 4, 1, 12, 0, 2), 32.0),
         ]
+
+
+class TestWattHourCleaner:
+    @pytest.fixture
+    def cleaner(self):
+        return analysis.clean_watthours_to_watts
+
+    @pytest.mark.asyncio
+    async def test_one_entry_insufficient_to_find_diff(self, cleaner):
+        data = [
+            (
+                datetime.datetime(2020, 4, 1, 12, 0, 0),
+                {"magnitude": 1.0, "unit": "watt_hour"},
+            ),
+        ]
+        datapoints = generate_datapoints(data)
+        output = [(time, data) async for (time, data) in cleaner(datapoints)]
+        assert output == []
+
+    @pytest.mark.asyncio
+    async def test_two_entries_provides_diff_with_second_time(self, cleaner):
+        data = [
+            (
+                datetime.datetime(2020, 4, 1, 12, 0, 0),
+                {"magnitude": 1.0, "unit": "watt_hour"},
+            ),
+            (
+                datetime.datetime(2020, 4, 1, 13, 0, 0),
+                {"magnitude": 10.0, "unit": "watt_hour"},
+            ),
+        ]
+        datapoints = generate_datapoints(data)
+        output = [(time, data) async for (time, data) in cleaner(datapoints)]
+        assert len(output) == 1
+        assert output[0][0] == datetime.datetime(2020, 4, 1, 13, 0, 0)
+        assert output[0][1] == pytest.approx(9.0, 0.0001)
+
+    @pytest.mark.asyncio
+    async def test_None_ignored(self, cleaner):
+        data = [
+            (
+                datetime.datetime(2020, 4, 1, 12, 0, 0),
+                {"magnitude": 1.0, "unit": "watt_hour"},
+            ),
+            (datetime.datetime(2020, 4, 1, 12, 58, 0), None,),
+            (
+                datetime.datetime(2020, 4, 1, 13, 0, 0),
+                {"magnitude": 10.0, "unit": "watt_hour"},
+            ),
+        ]
+        datapoints = generate_datapoints(data)
+        output = [(time, data) async for (time, data) in cleaner(datapoints)]
+        assert len(output) == 1
+        assert output[0][0] == datetime.datetime(2020, 4, 1, 13, 0, 0)
+        assert output[0][1] == pytest.approx(9.0, 0.0001)
