@@ -7,6 +7,7 @@ import typing as t
 from uuid import UUID
 
 from matplotlib.axes._base import _AxesBase
+from pint import _DEFAULT_REGISTRY as ureg
 
 from apd.aggregation.query import get_data_by_deployment
 from apd.aggregation.database import DataPoint
@@ -25,8 +26,21 @@ class Config:
 async def clean_watthours_to_watts(
     datapoints: t.AsyncIterator[DataPoint],
 ) -> t.AsyncIterator[t.Tuple[datetime.datetime, float]]:
-    async for date, data in clean_magnitude(datapoints):
-        yield (date, data)
+    last_watthours = None
+    last_time = None
+    async for datapoint in datapoints:
+        if datapoint.data is None:
+            continue
+        time = datapoint.collected_at
+        watthours = ureg.Quantity(datapoint.data["magnitude"], datapoint.data["unit"])
+        if last_watthours:
+            seconds_elapsed = (time - last_time).total_seconds()
+            time_elapsed = ureg.Quantity(seconds_elapsed, ureg.second)
+            additional_power = watthours - last_watthours
+            power = additional_power / time_elapsed
+            yield time, power.to(ureg.watt).magnitude
+        last_watthours = watthours
+        last_time = datapoint.collected_at
 
 
 async def clean_magnitude(
