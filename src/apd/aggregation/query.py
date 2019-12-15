@@ -57,3 +57,10 @@ async def get_data(
     rows = await loop.run_in_executor(None, query.all)
     for row in rows:
         yield DataPoint.from_sql_result(row)
+
+
+async def get_deployment_ids():
+    db_session = db_session_var.get()
+    loop = asyncio.get_running_loop()
+    query = db_session.query(datapoint_table.c.deployment_id).distinct()
+    return [row.deployment_id for row in await loop.run_in_executor(None, query.all)]
