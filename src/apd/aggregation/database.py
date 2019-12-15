@@ -59,7 +59,7 @@ class DateEqualComparator(ExprComparator):
 @dataclass
 class DataPoint:
     sensor_name: str
-    data: t.Dict[str, t.Any]
+    data: t.Any
     deployment_id: uuid.UUID
     id: t.Optional[int] = None
     collected_at: datetime.datetime = field(default_factory=datetime.datetime.now)
