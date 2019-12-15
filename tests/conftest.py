@@ -27,7 +27,7 @@ def db_session(db_uri):
 
 
 @pytest.fixture
-def migrated_db(db_uri):
+def migrated_db(db_uri, db_session):
     config = Config()
     config.set_main_option("script_location", "apd.aggregation:alembic")
     config.set_main_option("sqlalchemy.url", db_uri)
@@ -43,6 +43,9 @@ def migrated_db(db_uri):
         script.run_env()
 
     yield
+
+    # Clear any pending work from the db_session connection
+    db_session.rollback()
 
     with EnvironmentContext(config, script, fn=downgrade):
         script.run_env()
