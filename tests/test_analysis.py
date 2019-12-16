@@ -222,6 +222,48 @@ class TestWattHourCleaner:
         assert output[0][1] == pytest.approx(9.0, 0.0001)
 
     @pytest.mark.asyncio
+    async def test_fractional_hour(self, cleaner):
+        data = [
+            (
+                datetime.datetime(2020, 4, 1, 12, 0, 0),
+                {"magnitude": 1.0, "unit": "watt_hour"},
+            ),
+            (
+                datetime.datetime(2020, 4, 1, 12, 23, 42),
+                {"magnitude": 10.0, "unit": "watt_hour"},
+            ),
+        ]
+        datapoints = generate_datapoints(data)
+        output = [(time, data) async for (time, data) in cleaner(datapoints)]
+        assert len(output) == 1
+        assert output[0][0] == datetime.datetime(2020, 4, 1, 12, 23, 42)
+        assert output[0][1] == pytest.approx(22.7848, 0.001)
+
+    @pytest.mark.asyncio
+    async def test_diff_happens_pairwise(self, cleaner):
+        data = [
+            (
+                datetime.datetime(2020, 4, 1, 12, 0, 0),
+                {"magnitude": 1.0, "unit": "watt_hour"},
+            ),
+            (
+                datetime.datetime(2020, 4, 1, 12, 23, 42),
+                {"magnitude": 10.0, "unit": "watt_hour"},
+            ),
+            (
+                datetime.datetime(2020, 4, 1, 13, 23, 42),
+                {"magnitude": 13.0, "unit": "watt_hour"},
+            ),
+        ]
+        datapoints = generate_datapoints(data)
+        output = [(time, data) async for (time, data) in cleaner(datapoints)]
+        assert len(output) == 2
+        assert output[0][0] == datetime.datetime(2020, 4, 1, 12, 23, 42)
+        assert output[0][1] == pytest.approx(22.7848, 0.001)
+        assert output[1][0] == datetime.datetime(2020, 4, 1, 13, 23, 42)
+        assert output[1][1] == pytest.approx(3, 0.001)
+
+    @pytest.mark.asyncio
     async def test_None_ignored(self, cleaner):
         data = [
             (
