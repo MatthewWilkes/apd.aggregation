@@ -10,6 +10,7 @@ import pytest
 import sqlalchemy
 
 import apd.aggregation.collect
+from apd.aggregation.database import Deployment
 
 
 @pytest.fixture
@@ -109,7 +110,14 @@ class TestAddDataFromSensors:
     @pytest.mark.asyncio
     async def test_datapoints_are_added_to_the_session(self, mut, db_session) -> None:
         assert db_session.execute.call_count == 0
-        datapoints = await mut(db_session, ["http://localhost"], "")
+        datapoints = await mut(
+            db_session,
+            [
+                Deployment(
+                    id=None, colour=None, name=None, uri="http://localhost", api_key=""
+                )
+            ],
+        )
         assert db_session.execute.call_count == len(datapoints)
 
 
@@ -140,7 +148,12 @@ class TestDatabaseConnection:
     @pytest.mark.asyncio
     async def test_datapoints_are_added_to_the_session(self, db_session, table) -> None:
         datapoints = await apd.aggregation.collect.add_data_from_sensors(
-            db_session, ["http://localhost"], ""
+            db_session,
+            [
+                Deployment(
+                    id=None, colour=None, name=None, uri="http://localhost", api_key=""
+                )
+            ],
         )
         num_points = db_session.query(table).count()
         assert num_points == len(datapoints) == 2
@@ -149,7 +162,14 @@ class TestDatabaseConnection:
     async def test_datapoints_can_be_mapped_back_to_DataPoints(
         self, mut, db_session, table, model
     ) -> None:
-        datapoints = await mut(db_session, ["http://localhost"], "")
+        datapoints = await mut(
+            db_session,
+            [
+                Deployment(
+                    id=None, colour=None, name=None, uri="http://localhost", api_key=""
+                )
+            ],
+        )
         db_points = [
             model.from_sql_result(result) for result in db_session.query(table)
         ]
@@ -160,7 +180,12 @@ class TestDatabaseConnection:
         self, db_session, model, table, daily_summary_view
     ) -> None:
         await apd.aggregation.collect.add_data_from_sensors(
-            db_session, ["http://localhost"], ""
+            db_session,
+            [
+                Deployment(
+                    id=None, colour=None, name=None, uri="http://localhost", api_key=""
+                )
+            ],
         )
 
         headers = table.c.sensor_name, table.c.data

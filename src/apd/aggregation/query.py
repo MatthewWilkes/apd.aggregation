@@ -10,7 +10,12 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm.session import Session
 
 
-from apd.aggregation.database import datapoint_table, DataPoint
+from apd.aggregation.database import (
+    datapoint_table,
+    DataPoint,
+    deployment_table,
+    Deployment,
+)
 
 
 db_session_var: ContextVar[Session] = ContextVar("db_session")
@@ -64,6 +69,18 @@ async def get_deployment_ids() -> t.List[UUID]:
     loop = asyncio.get_running_loop()
     query = db_session.query(datapoint_table.c.deployment_id).distinct()
     return [row.deployment_id for row in await loop.run_in_executor(None, query.all)]
+
+
+async def get_deployment_by_id(deployment_id: UUID) -> Deployment:
+    db_session = db_session_var.get()
+    loop = asyncio.get_running_loop()
+    query = db_session.query(deployment_table).filter(
+        deployment_table.c.id == deployment_id
+    )
+    return [
+        Deployment.from_sql_result(row)
+        for row in await loop.run_in_executor(None, query.all)
+    ][0]
 
 
 async def get_data_by_deployment(
