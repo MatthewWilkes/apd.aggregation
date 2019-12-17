@@ -16,7 +16,7 @@ twine = "*"
 sqlalchemy-stubs = "*"
 
 [packages]
-apd-aggregation = {editable = true,path = "."}
+apd-aggregation = {editable = true,extras = ["jupyter"],path = "."}
 apd-sensors = {editable = true,extras = ["webapp"],path = "./../code"}
 
 [requires]
