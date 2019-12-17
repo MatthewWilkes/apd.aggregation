@@ -14,6 +14,16 @@ from sqlalchemy.schema import Table
 
 metadata = sqlalchemy.MetaData()
 
+deployment_table = Table(
+    "deployments",
+    metadata,
+    sqlalchemy.Column("id", UUID(as_uuid=True), primary_key=True),
+    sqlalchemy.Column("uri", sqlalchemy.String, index=False),
+    sqlalchemy.Column("name", sqlalchemy.String, index=False, nullable=True),
+    sqlalchemy.Column("colour", sqlalchemy.String, index=False, nullable=True),
+    sqlalchemy.Column("api_key", sqlalchemy.String, index=False),
+)
+
 datapoint_table = Table(
     "datapoints",
     metadata,
@@ -84,6 +94,23 @@ class DataPoint:
             fallback_expression=sqlalchemy.cast(datapoint_table.c.collected_at, DATE),
             raw_expression=datapoint_table.c.collected_at,
         )
+
+
+@dataclass
+class Deployment:
+    id: t.Optional[uuid.UUID]
+    uri: str
+    name: t.Optional[str]
+    colour: t.Optional[str]
+    api_key: t.Optional[str]
+
+    @classmethod
+    def from_sql_result(cls, result) -> Deployment:
+        return cls(**result._asdict())
+
+    def _asdict(self) -> t.Dict[str, t.Any]:
+        data = asdict(self)
+        return data
 
 
 def main() -> None:

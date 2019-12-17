@@ -15,8 +15,12 @@ from matplotlib.axes._base import _AxesBase
 from matplotlib.figure import Figure
 from pint import _DEFAULT_REGISTRY as ureg
 
-from apd.aggregation.query import get_data_by_deployment, with_database
-from apd.aggregation.database import DataPoint
+from apd.aggregation.query import (
+    get_data_by_deployment,
+    with_database,
+    get_deployment_by_id,
+)
+from apd.aggregation.database import DataPoint, deployment_table
 
 
 @dataclasses.dataclass(frozen=True)
@@ -152,19 +156,27 @@ async def plot_sensor(
     config: Config, plot: _AxesBase, location_names: t.Dict[UUID, str], **kwargs: t.Any
 ) -> _AxesBase:
     locations = []
-    async for deployment, query_results in get_data_by_deployment(
+    async for deployment_id, query_results in get_data_by_deployment(
         sensor_name=config.sensor_name, **kwargs
     ):
+        try:
+            deployment = await get_deployment_by_id(deployment_id)
+        except IndexError:
+            name = deployment_id
+            colour = None
+        else:
+            name = deployment.name
+            colour = deployment.colour
         # Mypy currently doesn't understand callable fields on datatypes: https://github.com/python/mypy/issues/5485
         points = [dp async for dp in config.clean(query_results)]  # type: ignore
         if not points:
             continue
-        locations.append(deployment)
+        locations.append(name)
         x, y = zip(*points)
         plot.set_title(config.title)
         plot.set_ylabel(config.ylabel)
-        plot.plot_date(x, y, f"-", xdate=True)
-    plot.legend([location_names.get(l, l) for l in locations])
+        plot.plot_date(x, y, color=colour, linestyle="-", marker="", xdate=True)
+    plot.legend(locations)
     return plot
 
 
@@ -198,7 +210,8 @@ async def plot_multiple_charts(*args: t.Any, **kwargs: t.Any) -> Figure:
     configs = kwargs.pop("configs", None)
     dimensions = kwargs.pop("dimensions", None)
 
-    with with_database("postgresql+psycopg2://apd@localhost/apd"):
+    with with_database("postgresql+psycopg2://apd@localhost/apd") as session:
+        loop = asyncio.get_running_loop()
         coros = []
         if configs is None:
             # If no configs are supplied, use all known configs
@@ -211,6 +224,13 @@ async def plot_multiple_charts(*args: t.Any, **kwargs: t.Any) -> Figure:
             total_configs = len(configs)
             columns = round(math.sqrt(total_configs))
             rows = math.ceil(total_configs / columns)
+        if location_names is None:
+            location_query = session.query(
+                deployment_table.c.id, deployment_table.c.name
+            )
+            location_data = await loop.run_in_executor(None, location_query.all)
+            location_names = dict(location_data)
+
         figure = plt.figure(figsize=(10 * columns, 5 * rows), dpi=300)
         for i, config in enumerate(configs, start=1):
             plot = figure.add_subplot(columns, rows, i)

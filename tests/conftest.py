@@ -42,13 +42,14 @@ def migrated_db(db_uri, db_session):
     with EnvironmentContext(config, script, fn=upgrade):
         script.run_env()
 
-    yield
+    try:
+        yield
+    finally:
+        # Clear any pending work from the db_session connection
+        db_session.rollback()
 
-    # Clear any pending work from the db_session connection
-    db_session.rollback()
-
-    with EnvironmentContext(config, script, fn=downgrade):
-        script.run_env()
+        with EnvironmentContext(config, script, fn=downgrade):
+            script.run_env()
 
 
 @pytest.fixture

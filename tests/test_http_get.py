@@ -14,6 +14,7 @@ import pytest
 from apd.sensors.wsgi import v21
 
 from apd.aggregation import collect
+from apd.aggregation.database import Deployment
 
 pytestmark = [pytest.mark.functional]
 
@@ -123,7 +124,14 @@ class TestAddDataFromSensors:
     async def test_get_get_data_from_sensors(
         self, mock_db_session, sensors: t.List[Sensor[t.Any]], mut, http_server: str
     ) -> None:
-        results = await mut(mock_db_session, [http_server], "testing")
+        results = await mut(
+            mock_db_session,
+            [
+                Deployment(
+                    id=None, colour=None, name=None, uri=http_server, api_key="testing"
+                )
+            ],
+        )
         assert mock_db_session.execute.call_count == len(sensors)
         assert len(results) == len(sensors)
 
@@ -131,7 +139,17 @@ class TestAddDataFromSensors:
     async def test_get_get_data_from_sensors_with_multiple_servers(
         self, mock_db_session, sensors: t.List[Sensor[t.Any]], mut, http_server: str
     ) -> None:
-        results = await mut(mock_db_session, [http_server, http_server], "testing")
+        results = await mut(
+            mock_db_session,
+            [
+                Deployment(
+                    id=None, colour=None, name=None, uri=http_server, api_key="testing"
+                ),
+                Deployment(
+                    id=None, colour=None, name=None, uri=http_server, api_key="testing"
+                ),
+            ],
+        )
         assert mock_db_session.execute.call_count == len(sensors) * 2
         assert len(results) == len(sensors) * 2
 
@@ -149,6 +167,22 @@ class TestAddDataFromSensors:
             match=f"Error loading data from {bad_api_key_http_server}: Supply API key in X-API-Key header",
         ):
             await mut(
-                mock_db_session, [http_server, bad_api_key_http_server], "testing"
+                mock_db_session,
+                [
+                    Deployment(
+                        id=None,
+                        colour=None,
+                        name=None,
+                        uri=http_server,
+                        api_key="testing",
+                    ),
+                    Deployment(
+                        id=None,
+                        colour=None,
+                        name=None,
+                        uri=bad_api_key_http_server,
+                        api_key="testing",
+                    ),
+                ],
             )
         assert mock_db_session.execute.call_count == 0
