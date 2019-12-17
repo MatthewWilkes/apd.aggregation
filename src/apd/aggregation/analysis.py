@@ -144,13 +144,13 @@ configs = (
 )
 
 
-def get_known_configs():
+def get_known_configs() -> t.Dict[str, Config]:
     return {config.title: config for config in configs}
 
 
 async def plot_sensor(
-    config: Config, plot: _AxesBase, location_names: t.Dict[UUID, str], **kwargs
-):
+    config: Config, plot: _AxesBase, location_names: t.Dict[UUID, str], **kwargs: t.Any
+) -> _AxesBase:
     locations = []
     async for deployment, query_results in get_data_by_deployment(
         sensor_name=config.sensor_name, **kwargs
