@@ -10,7 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm.session import Session
 
 
-from apd.aggregation.collect import datapoint_table, DataPoint
+from apd.aggregation.database import datapoint_table, DataPoint
 
 
 db_session_var: ContextVar[Session] = ContextVar("db_session")
@@ -59,7 +59,7 @@ async def get_data(
         yield DataPoint.from_sql_result(row)
 
 
-async def get_deployment_ids():
+async def get_deployment_ids() -> t.List[UUID]:
     db_session = db_session_var.get()
     loop = asyncio.get_running_loop()
     query = db_session.query(datapoint_table.c.deployment_id).distinct()
@@ -67,7 +67,7 @@ async def get_deployment_ids():
 
 
 async def get_data_by_deployment(
-    *args, **kwargs
+    *args: t.Any, **kwargs: t.Any
 ) -> t.AsyncIterator[t.Tuple[UUID, t.AsyncIterator[DataPoint]]]:
     """Return an Async Iterator that contains two-item pairs.
     These pairs are a string (deployment_id), and an async iterator that contains

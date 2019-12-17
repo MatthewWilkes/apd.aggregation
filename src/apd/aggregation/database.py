@@ -86,7 +86,7 @@ class DataPoint:
         )
 
 
-def main():
+def main() -> None:
     engine = sqlalchemy.create_engine(
         "postgresql+psycopg2://apd@localhost/apd", echo=True
     )
