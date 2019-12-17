@@ -1,15 +1,21 @@
 from __future__ import annotations
 
+import asyncio
 import collections
+from concurrent.futures import ThreadPoolExecutor
 import dataclasses
 import datetime
+import functools
+import math
 import typing as t
 from uuid import UUID
 
+import matplotlib.pyplot as plt
 from matplotlib.axes._base import _AxesBase
+from matplotlib.figure import Figure
 from pint import _DEFAULT_REGISTRY as ureg
 
-from apd.aggregation.query import get_data_by_deployment
+from apd.aggregation.query import get_data_by_deployment, with_database
 from apd.aggregation.database import DataPoint
 
 
@@ -160,3 +166,61 @@ async def plot_sensor(
         plot.plot_date(x, y, f"-", xdate=True)
     plot.legend([location_names.get(l, l) for l in locations])
     return plot
+
+
+_Coroutine_Result = t.TypeVar("_Coroutine_Result")
+
+
+def wrap_coroutine(
+    f: t.Callable[..., t.Coroutine[t.Any, t.Any, _Coroutine_Result]]
+) -> t.Callable[..., _Coroutine_Result]:
+    """Given a coroutine, return a function that runs that coroutine
+    in a new event loop in an isolated thread"""
+
+    @functools.wraps(f)
+    def run_in_thread(*args: t.Any, **kwargs: t.Any) -> _Coroutine_Result:
+        loop = asyncio.new_event_loop()
+        wrapped = f(*args, **kwargs)
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            task = pool.submit(loop.run_until_complete, wrapped)
+        # Mypy can get confused when nesting generic functions, like we do here
+        # The fact that Task is generic means we lose the association with
+        # _CoroutineResult. Adding an explicit cast restores this.
+        return t.cast(_Coroutine_Result, task.result())
+
+    return run_in_thread
+
+
+async def plot_multiple_charts(*args: t.Any, **kwargs: t.Any) -> Figure:
+    # These parameters are pulled from kwargs to avoid confusing function
+    # introspection code in IPython widgets
+    location_names = kwargs.pop("location_names", None)
+    configs = kwargs.pop("configs", None)
+    dimensions = kwargs.pop("dimensions", None)
+
+    with with_database("postgresql+psycopg2://apd@localhost/apd"):
+        coros = []
+        if configs is None:
+            # If no configs are supplied, use all known configs
+            configs = get_known_configs().values()
+        if dimensions is None:
+            # If no dimensions are supplied, get the square root of the number
+            # of configs and round it to find a number of columns. This will
+            # keep the arrangement approximately square. Find rows by multiplying
+            # out rows.
+            total_configs = len(configs)
+            columns = round(math.sqrt(total_configs))
+            rows = math.ceil(total_configs / columns)
+        figure = plt.figure(figsize=(10 * columns, 5 * rows), dpi=300)
+        for i, config in enumerate(configs, start=1):
+            plot = figure.add_subplot(columns, rows, i)
+            coros.append(plot_sensor(config, plot, location_names, *args, **kwargs))
+        await asyncio.gather(*coros)
+    return figure
+
+
+def interactable_plot_multiple_charts(
+    *args: t.Any, **kwargs: t.Any
+) -> t.Callable[..., Figure]:
+    with_config = functools.partial(plot_multiple_charts, *args, **kwargs)
+    return wrap_coroutine(with_config)
