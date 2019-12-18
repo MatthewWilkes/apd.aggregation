@@ -16,21 +16,131 @@ from matplotlib.figure import Figure
 from pint import _DEFAULT_REGISTRY as ureg
 
 from apd.aggregation.query import (
+    get_data,
     get_data_by_deployment,
     with_database,
     get_deployment_by_id,
 )
 from apd.aggregation.database import DataPoint, deployment_table
+from .utils import merc_x, merc_y
+
+plot_key = t.TypeVar("plot_key")
+plot_value = t.TypeVar("plot_value")
+
+# Static UUID to represent aggregation of other deployments
+GLOBAL = UUID("bd02526e-7619-4a59-b04b-1fafd1c262d1")
 
 
-@dataclasses.dataclass(frozen=True)
-class Config:
+@dataclasses.dataclass
+class Config(t.Generic[plot_key, plot_value]):
     title: str
-    sensor_name: str
     clean: t.Callable[
-        [t.AsyncIterator[DataPoint]], t.AsyncIterator[t.Tuple[datetime.datetime, float]]
+        [t.AsyncIterator[DataPoint]], t.AsyncIterator[t.Tuple[plot_key, plot_value]]
     ]
-    ylabel: str
+    draw: t.Optional[
+        t.Callable[
+            [t.Any, t.Iterable[plot_key], t.Iterable[plot_value], t.Optional[str]], None
+        ]
+    ] = None
+    get_data: t.Optional[
+        t.Callable[..., t.AsyncIterator[t.Tuple[UUID, t.AsyncIterator[DataPoint]]]]
+    ] = None
+    ylabel: t.Optional[str] = None
+    sensor_name: dataclasses.InitVar[str] = None
+
+    def __post_init__(self, sensor_name: t.Optional[str] = None) -> None:
+        if self.draw is None:
+            self.draw = draw_date  # type: ignore
+        if self.get_data is None:
+            if sensor_name is None:
+                raise ValueError("You must specify either get_data or sensor_name")
+            self.get_data = get_one_sensor_by_deployment(sensor_name)
+
+
+def draw_date(
+    plot: _AxesBase,
+    x: t.Iterable[datetime.datetime],
+    y: t.Iterable[float],
+    colour: t.Optional[str],
+) -> None:
+    plot.plot_date(x, y, color=colour, linestyle="-", marker="", xdate=True)
+
+
+def draw_map(
+    plot: _AxesBase,
+    x: t.Iterable[t.Tuple[float, float]],
+    y: t.Iterable[float],
+    colour: t.Optional[str],
+) -> None:
+    lon = [merc_y(coord[0]) for coord in x]
+    lat = [merc_x(coord[1]) for coord in x]
+
+    for axis in "x", "y":
+        plt.tick_params(
+            axis=axis,
+            which="both",
+            bottom=False,
+            top=False,
+            left=False,
+            right=False,
+            labelbottom=False,
+            labelleft=False,
+        )
+
+    plot.tricontourf(lat, lon, y)
+    plot.plot(lat, lon, "wo", ms=3)
+    plot.set_aspect(1.0)
+
+
+def get_map_cleaner_for(
+    sensor_name: str,
+) -> t.Callable[
+    [t.AsyncIterator[DataPoint]], t.AsyncIterator[t.Tuple[t.Tuple[float, float], float]]
+]:
+    """Given a sensor_name that represents a float, return a coroutine that acts as a cleaner
+    extracting that sensor's data keyed by the value of a Location sensor."""
+
+    async def clean_latest_coord_and_value(
+        datapoints: t.AsyncIterator[DataPoint],
+    ) -> t.AsyncIterator[t.Tuple[t.Tuple[float, float], float]]:
+
+        # We will be building a dictionary of UUID to dictionary
+        # That inner dictionary should contain coord (float, float)
+        # and value (float) only. Either or both can be None.
+        class IntermediateData(t.TypedDict):
+            coord: t.Optional[t.Tuple[float, float]]
+            value: t.Optional[float]
+
+        # We will iterate over data points and build an entry in cleaned_data
+        # for each deployment. This lets newer data replace older data, as
+        # datapoints is assumed to be in date order
+        cleaned_data: t.Dict[UUID, IntermediateData] = {}
+        async for datapoint in datapoints:
+            # Get the existing data for this deployment, if we've seen it before
+            row_data = cleaned_data.get(datapoint.deployment_id, None)
+            if row_data is None:
+                # This is the first time we've seen this deployment
+                row_data = {"coord": None, "value": None}
+            if datapoint.sensor_name == "Location":
+                # Coord is a 2-tuple of floats
+                row_data["coord"] = (
+                    float(datapoint.data[0]),
+                    float(datapoint.data[1]),
+                )
+            elif datapoint.sensor_name == sensor_name:
+                # Value is a single float
+                row_data["value"] = float(datapoint.data)
+            # Store the info about this deployment back into the cleaned_data set
+            cleaned_data[datapoint.deployment_id]
+
+        for data in cleaned_data.values():
+            if data["coord"] is None or data["value"] is None:
+                # We only got a partial record, don't plot this
+                continue
+            yield data["coord"], data["value"]
+
+    # Return the set up cleaner coroutine
+    return clean_latest_coord_and_value
 
 
 async def clean_watthours_to_watts(
@@ -120,6 +230,23 @@ async def clean_passthrough(
             yield datapoint.collected_at, datapoint.data
 
 
+def get_one_sensor_by_deployment(
+    sensor_name: str,
+) -> t.Callable[..., t.AsyncIterator[t.Tuple[UUID, t.AsyncIterator[DataPoint]]]]:
+    return functools.partial(get_data_by_deployment, sensor_name=sensor_name)
+
+
+def get_all_data() -> t.Callable[
+    ..., t.AsyncIterator[t.Tuple[UUID, t.AsyncIterator[DataPoint]]]
+]:
+    async def get_all_data_inner(
+        *args: t.Any, **kwargs: t.Any
+    ) -> t.AsyncIterator[t.Tuple[UUID, t.AsyncIterator[DataPoint]]]:
+        yield GLOBAL, get_data(*args, **kwargs)
+
+    return get_all_data_inner
+
+
 configs = (
     Config(
         sensor_name="SolarCumulativeOutput",
@@ -148,25 +275,31 @@ configs = (
 )
 
 
-def get_known_configs() -> t.Dict[str, Config]:
+def get_known_configs() -> t.Dict[str, Config[t.Any, t.Any]]:
     return {config.title: config for config in configs}
 
 
 async def plot_sensor(
-    config: Config, plot: _AxesBase, location_names: t.Dict[UUID, str], **kwargs: t.Any
+    config: Config[t.Any, t.Any],
+    plot: _AxesBase,
+    location_names: t.Dict[UUID, str],
+    **kwargs: t.Any
 ) -> _AxesBase:
     locations = []
-    async for deployment_id, query_results in get_data_by_deployment(
-        sensor_name=config.sensor_name, **kwargs
-    ):
-        try:
-            deployment = await get_deployment_by_id(deployment_id)
-        except IndexError:
-            name = deployment_id
-            colour = None
+    if config.get_data is None:
+        raise ValueError("You must provide a get_data function")
+    async for deployment_id, query_results in config.get_data(**kwargs):
+        if deployment_id == GLOBAL:
+            name = "Global"
         else:
-            name = deployment.name
-            colour = deployment.colour
+            try:
+                deployment = await get_deployment_by_id(deployment_id)
+            except IndexError:
+                name = str(deployment_id)
+                colour = None
+            else:
+                name = deployment.name or str(deployment_id)
+                colour = deployment.colour
         # Mypy currently doesn't understand callable fields on datatypes: https://github.com/python/mypy/issues/5485
         points = [dp async for dp in config.clean(query_results)]  # type: ignore
         if not points:
@@ -175,7 +308,9 @@ async def plot_sensor(
         x, y = zip(*points)
         plot.set_title(config.title)
         plot.set_ylabel(config.ylabel)
-        plot.plot_date(x, y, color=colour, linestyle="-", marker="", xdate=True)
+        if config.draw is None:
+            raise ValueError("You must provide a get_data function")
+        config.draw(plot, x, y, colour)
     plot.legend(locations)
     return plot
 
