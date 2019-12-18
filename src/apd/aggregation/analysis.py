@@ -79,6 +79,15 @@ def draw_date(
     plot.plot_date(x, y, color=colour, linestyle="-", marker="", xdate=True)
 
 
+def draw_bar(
+    plot: _AxesBase,
+    x: t.Iterable[datetime.datetime],
+    y: t.Iterable[float],
+    colour: t.Optional[str],
+) -> None:
+    plot.bar(x, y, color=colour)
+
+
 def draw_map(
     plot: _AxesBase,
     x: t.Iterable[t.Tuple[float, float]],
@@ -173,7 +182,38 @@ async def clean_watthours_to_watts(
         last_time = datapoint.collected_at
 
 
-async def clean_magnitude(datapoints: t.AsyncIterator[DataPoint],) -> CLEANED_DT_FLOAT:
+async def clean_watthours_by_day(
+    datapoints: t.AsyncIterator[DataPoint],
+) -> CLEANED_DT_FLOAT:
+    last_watthours = None
+    last_date = None
+    async for datapoint in datapoints:
+        if datapoint.data is None:
+            continue
+        date = datapoint.collected_at.date()
+        if date != last_date:
+            # We have a new date
+            watthours = ureg.Quantity(
+                datapoint.data["magnitude"], datapoint.data["unit"]
+            )
+            if last_watthours is not None and last_date is not None:
+                midpoint = datetime.datetime.combine(last_date, datetime.time(12, 0, 0))
+                diff = watthours - last_watthours
+                yield midpoint, diff.to(ureg.kilowatt_hours).magnitude
+            last_watthours = watthours
+            last_date = datapoint.collected_at.date()
+    if last_watthours is not None and last_date is not None:
+        watthours = ureg.Quantity(datapoint.data["magnitude"], datapoint.data["unit"])
+        midpoint = datetime.datetime.combine(
+            datapoint.collected_at.date(), datetime.time(12, 0, 0)
+        )
+        diff = watthours - last_watthours
+        yield midpoint, diff.to(ureg.kilowatt_hours).magnitude
+
+
+async def clean_magnitude(
+    datapoints: t.AsyncIterator[DataPoint],
+) -> t.AsyncIterator[t.Tuple[datetime.datetime, float]]:
     async for datapoint in datapoints:
         if datapoint.data is None:
             continue
@@ -270,8 +310,15 @@ configs = (
     Config(
         sensor_name="SolarCumulativeOutput",
         clean=clean_watthours_to_watts,
-        title="Solar generation",
+        title="Solar momentary output",
         ylabel="Watts",
+    ),
+    Config(
+        sensor_name="SolarCumulativeOutput",
+        clean=clean_watthours_by_day,
+        title="Daily total generation",
+        ylabel="Kilowatt Hours",
+        draw=draw_bar,
     ),
     Config(
         sensor_name="RAMAvailable",
