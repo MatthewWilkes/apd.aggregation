@@ -131,7 +131,7 @@ def get_map_cleaner_for(
                 # Value is a single float
                 row_data["value"] = float(datapoint.data)
             # Store the info about this deployment back into the cleaned_data set
-            cleaned_data[datapoint.deployment_id]
+            cleaned_data[datapoint.deployment_id] = row_data
 
         for data in cleaned_data.values():
             if data["coord"] is None or data["value"] is None:
