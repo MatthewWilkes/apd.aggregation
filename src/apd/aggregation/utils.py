@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import contextlib
+import functools
 import importlib
 import io
 import math
 import os
 import typing as t
+
+from pint import _DEFAULT_REGISTRY as ureg
 
 
 # Set up mercator transform from https://wiki.openstreetmap.org/wiki/Mercator#Python
@@ -32,6 +35,14 @@ def merc_y(lat: float) -> float:
     ts = math.tan((math.pi / 2 - phi) / 2) / con
     y = 0 - r_major * math.log(ts)
     return y
+
+
+@functools.lru_cache
+def convert_temperature(magnitude: float, origin_unit: str, target_unit: str) -> float:
+    # if origin_unit == "degC" and target_unit == "degF":
+    #    return (magnitude * 1.8) + 32
+    temp = ureg.Quantity(magnitude, origin_unit)
+    return temp.to(target_unit).magnitude
 
 
 @contextlib.contextmanager
