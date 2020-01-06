@@ -364,7 +364,7 @@ class TestTemperatureMap:
     ):
         data = get_data()
         deployments = 0
-        async for deployment, data_points in cleaner(data):
+        async for deployment, data_points in data:
             deployments += 1
             cleaned = {a async for a in cleaner(data_points)}
         # There should only be one deployment
@@ -410,7 +410,7 @@ class TestTemperatureMap:
 
         data = get_data()
         deployments = 0
-        async for deployment, data_points in cleaner(data):
+        async for deployment, data_points in data:
             deployments += 1
             cleaned = {a async for a in cleaner(data_points)}
         # There should only be one deployment
