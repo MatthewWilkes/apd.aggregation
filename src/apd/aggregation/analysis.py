@@ -8,6 +8,7 @@ import datetime
 import functools
 import math
 import typing as t
+
 from uuid import UUID
 
 import matplotlib.pyplot as plt
@@ -22,24 +23,26 @@ from apd.aggregation.query import (
     get_deployment_by_id,
 )
 from apd.aggregation.database import DataPoint, deployment_table
-from .utils import merc_x, merc_y
-
-plot_key = t.TypeVar("plot_key")
-plot_value = t.TypeVar("plot_value")
+from .utils import merc_x, merc_y, convert_temperature
+from .typing import IntermediateMapData, T_key, T_value, CleanerFunc, Cleaned
+from .typing import (
+    CLEANED_COORD_FLOAT,
+    CLEANED_DT_FLOAT,
+    COORD_FLOAT_CLEANER,
+    DT_FLOAT_CLEANER,
+)
 
 # Static UUID to represent aggregation of other deployments
 GLOBAL = UUID("bd02526e-7619-4a59-b04b-1fafd1c262d1")
 
 
 @dataclasses.dataclass
-class Config(t.Generic[plot_key, plot_value]):
+class Config(t.Generic[T_key, T_value]):
     title: str
-    clean: t.Callable[
-        [t.AsyncIterator[DataPoint]], t.AsyncIterator[t.Tuple[plot_key, plot_value]]
-    ]
+    clean: CleanerFunc[Cleaned[T_key, T_value]]
     draw: t.Optional[
         t.Callable[
-            [t.Any, t.Iterable[plot_key], t.Iterable[plot_value], t.Optional[str]], None
+            [t.Any, t.Iterable[T_key], t.Iterable[T_value], t.Optional[str]], None
         ]
     ] = None
     get_data: t.Optional[
@@ -92,29 +95,19 @@ def draw_map(
     plot.set_aspect(1.0)
 
 
-def get_map_cleaner_for(
-    sensor_name: str,
-) -> t.Callable[
-    [t.AsyncIterator[DataPoint]], t.AsyncIterator[t.Tuple[t.Tuple[float, float], float]]
-]:
+def get_map_cleaner_for(sensor_name: str,) -> COORD_FLOAT_CLEANER:
     """Given a sensor_name that represents a float, return a coroutine that acts as a cleaner
     extracting that sensor's data keyed by the value of a Location sensor."""
 
     async def clean_latest_coord_and_value(
         datapoints: t.AsyncIterator[DataPoint],
-    ) -> t.AsyncIterator[t.Tuple[t.Tuple[float, float], float]]:
-
-        # We will be building a dictionary of UUID to dictionary
-        # That inner dictionary should contain coord (float, float)
-        # and value (float) only. Either or both can be None.
-        class IntermediateData(t.TypedDict):
-            coord: t.Optional[t.Tuple[float, float]]
-            value: t.Optional[float]
+    ) -> CLEANED_COORD_FLOAT:
 
         # We will iterate over data points and build an entry in cleaned_data
         # for each deployment. This lets newer data replace older data, as
         # datapoints is assumed to be in date order
-        cleaned_data: t.Dict[UUID, IntermediateData] = {}
+        # IntermediateMapData is a typing hint for a dictionary with specific key/values
+        cleaned_data: t.Dict[UUID, IntermediateMapData] = {}
         async for datapoint in datapoints:
             # Get the existing data for this deployment, if we've seen it before
             row_data = cleaned_data.get(datapoint.deployment_id, None)
@@ -145,7 +138,7 @@ def get_map_cleaner_for(
 
 async def clean_watthours_to_watts(
     datapoints: t.AsyncIterator[DataPoint],
-) -> t.AsyncIterator[t.Tuple[datetime.datetime, float]]:
+) -> CLEANED_DT_FLOAT:
     last_watthours = None
     last_time = None
     async for datapoint in datapoints:
@@ -163,18 +156,27 @@ async def clean_watthours_to_watts(
         last_time = datapoint.collected_at
 
 
-async def clean_magnitude(
-    datapoints: t.AsyncIterator[DataPoint],
-) -> t.AsyncIterator[t.Tuple[datetime.datetime, float]]:
+async def clean_magnitude(datapoints: t.AsyncIterator[DataPoint],) -> CLEANED_DT_FLOAT:
     async for datapoint in datapoints:
         if datapoint.data is None:
             continue
         yield datapoint.collected_at, datapoint.data["magnitude"]
 
 
+def convert_temperature_system(
+    cleaner: DT_FLOAT_CLEANER, temperature_unit: str,
+) -> DT_FLOAT_CLEANER:
+    async def converter(datapoints: t.AsyncIterator[DataPoint],) -> CLEANED_DT_FLOAT:
+        results = cleaner(datapoints)
+        async for date, temp_c in results:
+            yield date, convert_temperature(temp_c, "degC", temperature_unit)
+
+    return converter
+
+
 async def clean_temperature_fluctuations(
     datapoints: t.AsyncIterator[DataPoint],
-) -> t.AsyncIterator[t.Tuple[datetime.datetime, float]]:
+) -> CLEANED_DT_FLOAT:
     allowed_jitter = 2.5
     allowed_range = (-40, 80)
     window_datapoints: t.Deque[DataPoint] = collections.deque(maxlen=3)
@@ -222,7 +224,7 @@ async def clean_temperature_fluctuations(
 
 async def clean_passthrough(
     datapoints: t.AsyncIterator[DataPoint],
-) -> t.AsyncIterator[t.Tuple[datetime.datetime, float]]:
+) -> CLEANED_DT_FLOAT:
     async for datapoint in datapoints:
         if datapoint.data is None:
             continue
@@ -315,29 +317,6 @@ async def plot_sensor(
     return plot
 
 
-_Coroutine_Result = t.TypeVar("_Coroutine_Result")
-
-
-def wrap_coroutine(
-    f: t.Callable[..., t.Coroutine[t.Any, t.Any, _Coroutine_Result]]
-) -> t.Callable[..., _Coroutine_Result]:
-    """Given a coroutine, return a function that runs that coroutine
-    in a new event loop in an isolated thread"""
-
-    @functools.wraps(f)
-    def run_in_thread(*args: t.Any, **kwargs: t.Any) -> _Coroutine_Result:
-        loop = asyncio.new_event_loop()
-        wrapped = f(*args, **kwargs)
-        with ThreadPoolExecutor(max_workers=1) as pool:
-            task = pool.submit(loop.run_until_complete, wrapped)
-        # Mypy can get confused when nesting generic functions, like we do here
-        # The fact that Task is generic means we lose the association with
-        # _CoroutineResult. Adding an explicit cast restores this.
-        return t.cast(_Coroutine_Result, task.result())
-
-    return run_in_thread
-
-
 async def plot_multiple_charts(*args: t.Any, **kwargs: t.Any) -> Figure:
     # These parameters are pulled from kwargs to avoid confusing function
     # introspection code in IPython widgets
@@ -372,6 +351,29 @@ async def plot_multiple_charts(*args: t.Any, **kwargs: t.Any) -> Figure:
             coros.append(plot_sensor(config, plot, location_names, *args, **kwargs))
         await asyncio.gather(*coros)
     return figure
+
+
+_Coroutine_Result = t.TypeVar("_Coroutine_Result")
+
+
+def wrap_coroutine(
+    f: t.Callable[..., t.Coroutine[t.Any, t.Any, _Coroutine_Result]]
+) -> t.Callable[..., _Coroutine_Result]:
+    """Given a coroutine, return a function that runs that coroutine
+    in a new event loop in an isolated thread"""
+
+    @functools.wraps(f)
+    def run_in_thread(*args: t.Any, **kwargs: t.Any) -> _Coroutine_Result:
+        loop = asyncio.new_event_loop()
+        wrapped = f(*args, **kwargs)
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            task = pool.submit(loop.run_until_complete, wrapped)
+        # Mypy can get confused when nesting generic functions, like we do here
+        # The fact that Task is generic means we lose the association with
+        # _CoroutineResult. Adding an explicit cast restores this.
+        return t.cast(_Coroutine_Result, task.result())
+
+    return run_in_thread
 
 
 def interactable_plot_multiple_charts(
