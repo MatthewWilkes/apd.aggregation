@@ -158,7 +158,7 @@ def edit(
         update["colour"] = colour
     deployment_id = uuid.UUID(id)
 
-    update = (
+    update_stmt = (
         deployment_table.update()
         .where(deployment_table.c.id == deployment_id)
         .values(**update)
@@ -167,7 +167,7 @@ def edit(
     engine = create_engine(db)
     sm = sessionmaker(engine)
     Session = sm()
-    Session.execute(update)
+    Session.execute(update_stmt)
     deployments = Session.query(deployment_table).filter(
         deployment_table.c.id == deployment_id
     )
