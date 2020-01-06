@@ -323,8 +323,9 @@ async def plot_multiple_charts(*args: t.Any, **kwargs: t.Any) -> Figure:
     location_names = kwargs.pop("location_names", None)
     configs = kwargs.pop("configs", None)
     dimensions = kwargs.pop("dimensions", None)
+    db_uri = kwargs.pop("db_uri", "postgresql+psycopg2://apd@localhost/apd")
 
-    with with_database("postgresql+psycopg2://apd@localhost/apd") as session:
+    with with_database(db_uri) as session:
         loop = asyncio.get_running_loop()
         coros = []
         if configs is None:
