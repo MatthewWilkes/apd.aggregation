@@ -1,4 +1,6 @@
+import collections.abc
 import datetime
+import functools
 import uuid
 
 import pytest
@@ -18,6 +20,28 @@ async def generate_datapoints(datas):
             data=data,
             deployment_id=deployment_id,
         )
+
+
+@functools.singledispatch
+def consume(input_iterator):
+    items = [item for item in input_iterator]
+
+    def inner_iterator():
+        for item in items:
+            yield item
+
+    return inner_iterator()
+
+
+@consume.register
+async def consume_async(input_iterator: collections.abc.AsyncIterator):
+    items = [item async for item in input_iterator]
+
+    async def inner_iterator():
+        for item in items:
+            yield item
+
+    return inner_iterator()
 
 
 class TestPassThroughCleaner:
@@ -192,6 +216,17 @@ class TestWattHourCleaner:
     def cleaner(self):
         return analysis.clean_watthours_to_watts
 
+    @pytest.fixture(scope="class")
+    def huge_data_set(self):
+        date = datetime.datetime(2020, 4, 1, 12, 0, 0)
+        power = 500
+        data = []
+        for i in range(50_000):
+            date += datetime.timedelta(hours=1)
+            power += i
+            data.append((date, {"magnitude": power, "unit": "watt_hour"},))
+        return data
+
     @pytest.mark.asyncio
     async def test_one_entry_insufficient_to_find_diff(self, cleaner):
         data = [
@@ -221,6 +256,30 @@ class TestWattHourCleaner:
         assert len(output) == 1
         assert output[0][0] == datetime.datetime(2020, 4, 1, 13, 0, 0)
         assert output[0][1] == pytest.approx(9.0, 0.0001)
+
+    @pytest.mark.asyncio
+    async def test_nonstandard_units_can_be_used(self, cleaner):
+        data = [
+            (
+                datetime.datetime(2020, 4, 1, 12, 0, 0),
+                {"magnitude": 1.0, "unit": "watt_hour"},
+            ),
+            (
+                datetime.datetime(2020, 4, 1, 13, 0, 0),
+                {"magnitude": 10000.0, "unit": "joule"},
+            ),
+            (
+                datetime.datetime(2020, 4, 1, 14, 0, 0),
+                {"magnitude": 3.0, "unit": "watt_hour"},
+            ),
+        ]
+        datapoints = generate_datapoints(data)
+        output = [(time, data) async for (time, data) in cleaner(datapoints)]
+        assert len(output) == 2
+        assert output[0][0] == datetime.datetime(2020, 4, 1, 13, 0, 0)
+        assert output[0][1] == pytest.approx(1.7777, 0.001)
+        assert output[1][0] == datetime.datetime(2020, 4, 1, 14, 0, 0)
+        assert output[1][1] == pytest.approx(0.22222, 0.001)
 
     @pytest.mark.asyncio
     async def test_fractional_hour(self, cleaner):
@@ -282,6 +341,27 @@ class TestWattHourCleaner:
         assert len(output) == 1
         assert output[0][0] == datetime.datetime(2020, 4, 1, 13, 0, 0)
         assert output[0][1] == pytest.approx(9.0, 0.0001)
+
+    @pytest.mark.asyncio
+    @pytest.mark.performance
+    async def test_performance_of_cleaner(self, cleaner, huge_data_set):
+        import cProfile
+
+        # Generate data point objects before profiling starts
+        datapoints = await consume(generate_datapoints(huge_data_set))
+        profiler = cProfile.Profile()
+        profiler.enable()
+
+        # Run the cleaner to completion
+        await consume(cleaner(datapoints))
+
+        profiler.disable()
+        cleaner_stat = [
+            stat for stat in profiler.getstats() if stat.code == cleaner.__code__
+        ][0]
+        # Assert that the cleaner may take no more than 0.5 seconds to process
+        # these 50k data points
+        assert cleaner_stat.totaltime < 0.5
 
 
 class TestTemperatureMap:
