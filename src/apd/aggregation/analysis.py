@@ -145,14 +145,21 @@ async def clean_watthours_to_watts(
         if datapoint.data is None:
             continue
         time = datapoint.collected_at
-        watthours = ureg.Quantity(datapoint.data["magnitude"], datapoint.data["unit"])
+        if datapoint.data["unit"] == "watt_hour":
+            watt_hours = datapoint.data["magnitude"]
+        else:
+            watt_hours = (
+                ureg.Quantity(datapoint.data["magnitude"], datapoint.data["unit"])
+                .to(ureg.watt_hour)
+                .magnitude
+            )
         if last_watthours:
             seconds_elapsed = (time - last_time).total_seconds()
-            time_elapsed = ureg.Quantity(seconds_elapsed, ureg.second)
-            additional_power = watthours - last_watthours
-            power = additional_power / time_elapsed
-            yield time, power.to(ureg.watt).magnitude
-        last_watthours = watthours
+            hours_elapsed = seconds_elapsed / (60.0 * 60.0)
+            additional_power = watt_hours - last_watthours
+            power = additional_power / hours_elapsed
+            yield time, power
+        last_watthours = watt_hours
         last_time = datapoint.collected_at
 
 
