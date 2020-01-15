@@ -8,8 +8,8 @@ import datetime
 import functools
 import math
 import typing as t
-
 from uuid import UUID
+import warnings
 
 import matplotlib.pyplot as plt
 from matplotlib.axes._base import _AxesBase
@@ -57,6 +57,15 @@ class Config(t.Generic[T_key, T_value]):
         if self.get_data is None:
             if sensor_name is None:
                 raise ValueError("You must specify either get_data or sensor_name")
+            warnings.warn(
+                DeprecationWarning(
+                    f"The sensor_name parameter is deprecated. Please pass "
+                    f"get_data=get_one_sensor_by_deployment('{sensor_name}') "
+                    f"to ensure the same behaviour. The sensor_name= parameter "
+                    f"will be removed in apd.aggregation 3.0."
+                ),
+                stacklevel=3,
+            )
             self.get_data = get_one_sensor_by_deployment(sensor_name)
 
 
@@ -292,7 +301,7 @@ async def plot_sensor(
     config: Config[t.Any, t.Any],
     plot: _AxesBase,
     location_names: t.Dict[UUID, str],
-    **kwargs: t.Any
+    **kwargs: t.Any,
 ) -> _AxesBase:
     locations = []
     if config.get_data is None:
