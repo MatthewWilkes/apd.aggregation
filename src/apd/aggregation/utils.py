@@ -4,6 +4,7 @@ import contextlib
 import functools
 import importlib
 import io
+import logging
 import math
 import os
 import typing as t
@@ -84,3 +85,16 @@ def yappi_package_matches(stat, packages: t.List[str]):
         if stat.full_name.startswith(prefix):
             return True
     return False
+
+
+class AddSensorNameDefault(logging.Filter):
+    def filter(self, record):
+        if not hasattr(record, "sensorname"):
+            record.sensorname = "none"
+        return True
+
+
+class SensorNameStreamHandler(logging.StreamHandler):
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+        self.addFilter(AddSensorNameDefault())
