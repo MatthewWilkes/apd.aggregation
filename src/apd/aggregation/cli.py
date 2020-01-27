@@ -92,8 +92,15 @@ def load_handler_config(path: str) -> t.List[DataProcessor]:
     help="The connection string to a PostgreSQL database",
     envvar="APD_DB_URI",
 )
+@click.option(
+    "--historical",
+    is_flag=True,
+    help="Also trigger actions for data points that were already present in the database",
+)
 @click.option("-v", "--verbose", is_flag=True, help="Enables verbose mode")
-def run_actions(config: str, db: str, verbose: bool) -> t.Optional[int]:
+def run_actions(
+    config: str, db: str, verbose: bool, historical: bool
+) -> t.Optional[int]:
     """This runs the long-running action processors defined in a config file.
 
     The configuration file specified should be a Python file that defines a
@@ -111,7 +118,7 @@ def run_actions(config: str, db: str, verbose: bool) -> t.Optional[int]:
             await asyncio.gather(*starters)
 
             logger.info(f"Ingesting data")
-            data = get_data_ongoing()
+            data = get_data_ongoing(historical=historical)
             async for datapoint in data:
                 for handler in handlers:
                     await handler.push(datapoint)

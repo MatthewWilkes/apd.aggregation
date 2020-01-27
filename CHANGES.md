@@ -1,5 +1,8 @@
 ## Changes
 
-### 1.0.0 (Unreleased)
+### 1.0.0 (2020-01-27)
 
-* Generated from skeleton
+* Added management of known sensor endpoints
+* Added CLI script to collate data
+* Added analysis tools for Jupyter
+* Added long-running data synthesis and actions system

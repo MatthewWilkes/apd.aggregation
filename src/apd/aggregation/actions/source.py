@@ -3,8 +3,20 @@ import asyncio
 from apd.aggregation.query import db_session_var, get_data
 
 
-async def get_data_ongoing(*args, **kwargs):
+async def get_newest_record_id():
+    from apd.aggregation.database import datapoint_table
+    from sqlalchemy import func
+
+    loop = asyncio.get_running_loop()
+    db_session = db_session_var.get()
+    max_id_query = db_session.query(func.max(datapoint_table.c.id))
+    return await loop.run_in_executor(None, max_id_query.scalar)
+
+
+async def get_data_ongoing(*args, historical=False, **kwargs):
     last_id = 0
+    if not historical:
+        kwargs["inserted_after_record_id"] = last_id = await get_newest_record_id()
     db_session = db_session_var.get()
     while True:
         # Run a timer for 300 seconds concurrently with our work
@@ -42,8 +54,10 @@ async def wait_for_notify(loop, raw_connection):
             await asyncio.sleep(15)
 
 
-async def get_data_ongoing_psql_pubsub(*args, **kwargs):
+async def get_data_ongoing_psql_pubsub(*args, historical=False, **kwargs):
     last_id = 0
+    if not historical:
+        kwargs["inserted_after_record_id"] = last_id = await get_newest_record_id()
     db_session = db_session_var.get()
     db_session.execute("LISTEN apd_aggregation;")
     loop = asyncio.get_running_loop()
@@ -63,3 +77,4 @@ async def get_data_ongoing_psql_pubsub(*args, **kwargs):
         connection = db_session.connection()
         raw_connection = connection.connection
         await wait_for_notify(loop, raw_connection)
+        # Always yield new records from this point on
