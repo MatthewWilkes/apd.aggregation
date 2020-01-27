@@ -101,6 +101,12 @@ def standalone(
             Deployment.from_sql_result(deployment) for deployment in deployment_data
         )
     asyncio.run(add_data_from_sensors(Session, deployments))
+
+    if "postgresql" in db_uri:
+        # On Postgres sent a pubsub notification, in case other processes are waiting
+        # for this data
+        Session.execute("NOTIFY apd_aggregation;")
+
     Session.commit()
 
 

@@ -11,13 +11,13 @@ from apd.aggregation.database import DataPoint, datapoint_table
 from apd.aggregation.query import db_session_var
 
 
-async def generate_datapoints(datas):
+async def generate_datapoints(datas, sensor_name="TestSensor"):
     deployment_id = uuid.uuid4()
     for i, (time, data) in enumerate(datas, start=1):
         yield DataPoint(
             id=i,
             collected_at=time,
-            sensor_name="TestSensor",
+            sensor_name=sensor_name,
             data=data,
             deployment_id=deployment_id,
         )

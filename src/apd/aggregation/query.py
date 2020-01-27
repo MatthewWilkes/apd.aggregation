@@ -43,6 +43,7 @@ async def get_data(
     deployment_id: t.Optional[UUID] = None,
     collected_before: t.Optional[datetime.datetime] = None,
     collected_after: t.Optional[datetime.datetime] = None,
+    inserted_after_record_id: t.Optional[int] = None,
 ) -> t.AsyncIterator[DataPoint]:
     db_session = db_session_var.get()
     loop = asyncio.get_running_loop()
@@ -55,6 +56,8 @@ async def get_data(
         query = query.filter(datapoint_table.c.collected_at < collected_before)
     if collected_after:
         query = query.filter(datapoint_table.c.collected_at > collected_after)
+    if inserted_after_record_id:
+        query = query.filter(datapoint_table.c.id > inserted_after_record_id)
     query = query.order_by(
         datapoint_table.c.deployment_id,
         datapoint_table.c.sensor_name,

@@ -2,6 +2,7 @@ import datetime
 from uuid import UUID
 
 from apd.aggregation.database import datapoint_table
+from apd.aggregation.query import db_session_var
 
 from alembic.config import Config
 from alembic.script import ScriptDirectory
@@ -19,10 +20,12 @@ def db_session(db_uri):
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
 
-    engine = create_engine(db_uri, echo=True)
+    engine = create_engine(db_uri, echo=False)
     sm = sessionmaker(engine)
     Session = sm()
+    reset = db_session_var.set(Session)
     yield Session
+    db_session_var.reset(reset)
     Session.close()
 
 
@@ -43,7 +46,7 @@ def migrated_db(db_uri, db_session):
         script.run_env()
 
     try:
-        yield
+        yield db_session
     finally:
         # Clear any pending work from the db_session connection
         db_session.rollback()
