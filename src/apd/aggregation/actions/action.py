@@ -24,9 +24,9 @@ class OnlyOnChangeActionWrapper(Action):
         self.last_value = None
         return await self.wrapped.start()
 
-    async def handle(self, datapoint: DataPoint) -> None:
+    async def handle(self, datapoint: DataPoint) -> bool:
         if datapoint.data == self.last_value:
-            return
+            return False
         else:
             self.last_value = datapoint.data
             return await self.wrapped.handle(datapoint)
@@ -44,9 +44,9 @@ class OnlyAfterDateActionWrapper(Action):
     async def start(self) -> None:
         return await self.wrapped.start()
 
-    async def handle(self, datapoint: DataPoint) -> None:
+    async def handle(self, datapoint: DataPoint) -> bool:
         if datapoint.collected_at <= self.date_threshold:
-            return
+            return False
         return await self.wrapped.handle(datapoint)
 
 
@@ -56,10 +56,11 @@ class SaveToDatabaseAction(Action):
     async def start(self) -> None:
         return
 
-    async def handle(self, datapoint: DataPoint) -> None:
+    async def handle(self, datapoint: DataPoint) -> bool:
         loop = asyncio.get_running_loop()
         session = db_session_var.get()
         await loop.run_in_executor(None, handle_result, [datapoint], session)
+        return True
 
 
 class LoggingAction(Action):
@@ -68,6 +69,6 @@ class LoggingAction(Action):
     async def start(self) -> None:
         return
 
-    async def handle(self, datapoint: DataPoint) -> None:
+    async def handle(self, datapoint: DataPoint) -> bool:
         logger.warn(datapoint)
-        return
+        return True

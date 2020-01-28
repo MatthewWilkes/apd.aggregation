@@ -1,6 +1,8 @@
 import asyncio
+import functools
 import importlib.util
 import logging
+import signal
 import typing as t
 import uuid
 
@@ -83,6 +85,24 @@ def load_handler_config(path: str) -> t.List[DataProcessor]:
         raise ValueError(f"Could not load config file from {path}")
 
 
+def stats_signal_handler(sig, frame, original_sigint_handler=None, handlers=None):
+    for handler in handlers:
+        click.echo(
+            click.style(handler.name, bold=True, fg="red") + " " + handler.stats()
+        )
+    if sig == signal.SIGINT:
+        click.secho("Press Ctrl+C again to end the process", bold=True)
+        handler = signal.getsignal(signal.SIGINT)
+        signal.signal(signal.SIGINT, original_sigint_handler)
+        asyncio.get_running_loop().call_later(5, install_ctrl_c_signal_handler, handler)
+    return
+
+
+def install_ctrl_c_signal_handler(signal_handler):
+    click.secho("Press Ctrl+C to view statistics", bold=True)
+    signal.signal(signal.SIGINT, signal_handler)
+
+
 @click.command()
 @click.argument("config", nargs=1)
 @click.option(
@@ -119,6 +139,20 @@ def run_actions(
 
             logger.info(f"Ingesting data")
             data = get_data_ongoing(historical=historical)
+
+            original_sigint_handler = signal.getsignal(signal.SIGINT)
+            signal_handler = functools.partial(
+                stats_signal_handler,
+                handlers=handlers,
+                original_sigint_handler=original_sigint_handler,
+            )
+
+            for signal_name in "SIGINFO", "SIGUSR1", "SIGINT":
+                try:
+                    signal.signal(signal.signals[signal_name], signal_handler)
+                except AttributeError:
+                    pass
+
             async for datapoint in data:
                 for handler in handlers:
                     await handler.push(datapoint)
