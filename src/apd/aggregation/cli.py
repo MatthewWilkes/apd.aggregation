@@ -13,7 +13,7 @@ from sqlalchemy.orm import sessionmaker
 
 from . import collect
 from .actions.runner import DataProcessor
-from .actions.source import get_data_ongoing
+from .actions.source import get_data_ongoing, refeed_queue_var
 from .database import Deployment, deployment_table
 from .query import with_database
 
@@ -132,6 +132,10 @@ def run_actions(
         with with_database(db):
             logger.info("Loading configuration")
             handlers = load_handler_config(config)
+
+            # Set up the refeed queue before starting the handlers
+            # or source, so they all have access to it
+            refeed_queue_var.set(asyncio.Queue())
 
             logger.info(f"Configured {len(handlers)} handlers")
             starters = [handler.start() for handler in handlers]

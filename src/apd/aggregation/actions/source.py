@@ -1,6 +1,9 @@
 import asyncio
+from contextvars import ContextVar
 
 from apd.aggregation.query import db_session_var, get_data
+
+refeed_queue_var: ContextVar[asyncio.Queue] = ContextVar("refeed_queue")
 
 
 async def get_newest_record_id():
@@ -13,21 +16,36 @@ async def get_newest_record_id():
     return await loop.run_in_executor(None, max_id_query.scalar)
 
 
+async def queue_iterator(queue):
+    while True:
+        yield await queue.get()
+
+
 async def get_data_ongoing(*args, historical=False, **kwargs):
     last_id = 0
     if not historical:
         kwargs["inserted_after_record_id"] = last_id = await get_newest_record_id()
     db_session = db_session_var.get()
+    refeed_queue = refeed_queue_var.get()
+
     while True:
         # Run a timer for 300 seconds concurrently with our work
         minimum_loop_timer = asyncio.create_task(asyncio.sleep(300))
-        async for datapoint in get_data(*args, **kwargs):
+
+        async for datapoint in get_data(
+            *args, inserted_after_record_id=last_id, order=False, **kwargs
+        ):
             if datapoint.id > last_id:
                 # This is the newest datapoint we have handled so far
                 last_id = datapoint.id
             yield datapoint
             # Next time, find only data points later than the latest we've seen
-            kwargs["inserted_after_record_id"] = last_id
+
+        while not refeed_queue.empty():
+            # Process any datapoints gathered through the refeed queue
+            async for datapoint in queue_iterator(refeed_queue):
+                yield datapoint
+
         # Commit the DB to store any work that was done in this loop and
         # ensure that any isolation level issues do not prevent loading more
         # data
