@@ -62,7 +62,7 @@ async def get_data_ongoing_psql_pubsub(*args, historical=False, **kwargs):
     db_session.execute("LISTEN apd_aggregation;")
     loop = asyncio.get_running_loop()
     while True:
-        async for datapoint in get_data(*args, **kwargs):
+        async for datapoint in get_data(*args, order=False, **kwargs):
             if datapoint.id > last_id:
                 # This is the newest datapoint we have handled so far
                 last_id = datapoint.id
