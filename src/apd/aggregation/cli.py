@@ -132,7 +132,10 @@ def run_actions(
     The configuration file specified should be a Python file that defines a
     list of DataProcessor objects called processors.n
     """
-    logging.basicConfig(level=logging.DEBUG if verbose else logging.WARN)
+    logging.basicConfig(
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        level=logging.DEBUG if verbose else logging.WARN,
+    )
 
     async def main_loop():
         with with_database(db):

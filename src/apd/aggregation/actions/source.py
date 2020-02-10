@@ -1,9 +1,11 @@
 import asyncio
 from contextvars import ContextVar
+import logging
 
 from apd.aggregation.query import db_session_var, get_data
 
 refeed_queue_var: ContextVar[asyncio.Queue] = ContextVar("refeed_queue")
+logger = logging.getLogger(__name__)
 
 
 async def get_newest_record_id():
@@ -17,20 +19,20 @@ async def get_newest_record_id():
 
 
 async def queue_iterator(queue):
-    while True:
-        yield await queue.get()
+    while not queue.empty():
+        yield queue.get_nowait()
 
 
 async def get_data_ongoing(*args, historical=False, **kwargs):
     last_id = 0
     if not historical:
-        kwargs["inserted_after_record_id"] = last_id = await get_newest_record_id()
+        last_id = await get_newest_record_id()
     db_session = db_session_var.get()
     refeed_queue = refeed_queue_var.get()
 
     while True:
         # Run a timer for 300 seconds concurrently with our work
-        minimum_loop_timer = asyncio.create_task(asyncio.sleep(300))
+        minimum_loop_timer = asyncio.create_task(asyncio.sleep(30))
 
         async for datapoint in get_data(
             *args, inserted_after_record_id=last_id, order=False, **kwargs
@@ -43,6 +45,7 @@ async def get_data_ongoing(*args, historical=False, **kwargs):
 
         while not refeed_queue.empty():
             # Process any datapoints gathered through the refeed queue
+            logger.info("Passing refeed queue")
             async for datapoint in queue_iterator(refeed_queue):
                 yield datapoint
 
@@ -53,6 +56,7 @@ async def get_data_ongoing(*args, historical=False, **kwargs):
         # Wait for that timer to complete. If our loop took over 5 minutes
         # this will complete immediately, otherwise it will block
         await minimum_loop_timer
+        logger.info("Getting next group of data")
 
 
 async def wait_for_notify(loop, raw_connection):

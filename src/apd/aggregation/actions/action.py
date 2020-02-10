@@ -110,6 +110,7 @@ class RefeedAction(Action):
             logger.error("Refeed queue has not been initialised")
             return False
         else:
+            logger.info(f"Re-fed {datapoint} to aggregation queue")
             await refeed_queue.put(datapoint)
             return True
 
@@ -133,4 +134,7 @@ class WebhookAction(Action):
                     "value3": datapoint.deployment_id.hex,
                 },
             ) as request:
+                logger.info(
+                    f"Made webhook request for {datapoint} with status {request.status}"
+                )
                 return request.status == 200
