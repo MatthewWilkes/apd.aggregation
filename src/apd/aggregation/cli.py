@@ -35,7 +35,7 @@ def collect_sensor_data(
     being queried.
 
     You may specify any number of servers, the variable should be the full URL
-    to the sensor's HTTP interface, not including the /v/2.0 portion. Muliple
+    to the sensor's HTTP interface, not including the /v/2.0 portion. Multiple
     URLs should be separated with a space.
     """
     if tolerate_failures:
