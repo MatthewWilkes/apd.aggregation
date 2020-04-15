@@ -19,17 +19,17 @@ def upgrade():
     create_view = """
     CREATE VIEW daily_summary AS
       SELECT
-        sensor_values.sensor_name AS sensor_name,
-        sensor_values.data AS data,
-        count(sensor_values.id) AS count
-    FROM sensor_values
+        datapoints.sensor_name AS sensor_name,
+        datapoints.data AS data,
+        count(datapoints.id) AS count
+    FROM datapoints
     WHERE
-        sensor_values.collected_at >= CAST(CURRENT_DATE AS DATE)
+        datapoints.collected_at >= CAST(CURRENT_DATE AS DATE)
         AND
-        sensor_values.collected_at < CAST(CURRENT_DATE AS DATE) + 1
+        datapoints.collected_at < CAST(CURRENT_DATE AS DATE) + 1
     GROUP BY
-        sensor_values.sensor_name,
-        sensor_values.data;
+        datapoints.sensor_name,
+        datapoints.data;
     """
     op.execute(create_view)
 

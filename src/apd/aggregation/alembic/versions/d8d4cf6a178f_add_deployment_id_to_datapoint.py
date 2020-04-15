@@ -18,17 +18,17 @@ depends_on = None
 
 def upgrade():
     op.add_column(
-        "sensor_values",
+        "datapoints",
         sa.Column("deployment_id", postgresql.UUID(as_uuid=True), nullable=True),
     )
     op.create_index(
-        op.f("ix_sensor_values_deployment_id"),
-        "sensor_values",
+        op.f("ix_datapoints_deployment_id"),
+        "datapoints",
         ["deployment_id"],
         unique=False,
     )
 
 
 def downgrade():
-    op.drop_index(op.f("ix_sensor_values_deployment_id"), table_name="sensor_values")
-    op.drop_column("sensor_values", "deployment_id")
+    op.drop_index(op.f("ix_datapoints_deployment_id"), table_name="datapoints")
+    op.drop_column("datapoints", "deployment_id")

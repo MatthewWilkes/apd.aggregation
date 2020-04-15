@@ -17,19 +17,16 @@ depends_on = None
 
 def upgrade():
     op.create_index(
-        op.f("ix_sensor_values_collected_at"),
-        "sensor_values",
+        op.f("ix_datapoints_collected_at"),
+        "datapoints",
         ["collected_at"],
         unique=False,
     )
     op.create_index(
-        op.f("ix_sensor_values_sensor_name"),
-        "sensor_values",
-        ["sensor_name"],
-        unique=False,
+        op.f("ix_datapoints_sensor_name"), "datapoints", ["sensor_name"], unique=False,
     )
 
 
 def downgrade():
-    op.drop_index(op.f("ix_sensor_values_sensor_name"), table_name="sensor_values")
-    op.drop_index(op.f("ix_sensor_values_collected_at"), table_name="sensor_values")
+    op.drop_index(op.f("ix_datapoints_sensor_name"), table_name="datapoints")
+    op.drop_index(op.f("ix_datapoints_collected_at"), table_name="datapoints")
