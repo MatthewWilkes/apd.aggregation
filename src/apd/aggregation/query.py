@@ -30,10 +30,12 @@ def with_database(uri: t.Optional[str] = None) -> t.Iterator[Session]:
     sm = sessionmaker(engine)
     Session = sm()
     token = db_session_var.set(Session)
-    yield Session
-    db_session_var.reset(token)
-    Session.commit()
-    Session.close()
+    try:
+        yield Session
+        Session.commit()
+    finally:
+        db_session_var.reset(token)
+        Session.close()
 
 
 async def get_data(
