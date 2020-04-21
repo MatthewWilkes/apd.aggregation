@@ -61,22 +61,26 @@ def profile_with_yappi() -> t.Iterator[None]:
 
     yappi.clear_stats()
     yappi.start()
-    yield None
-    yappi.stop()
+    try:
+        yield None
+    finally:
+        yappi.stop()
 
 
-class YappiPackageFilter:
-    """ This object can be passed to yappi's modname filter to limit
-    by Python package rather than module filename"""
+@functools.lru_cache
+def get_package_prefix(package: str) -> str:
+    mod = importlib.import_module(package)
+    prefix = mod.__file__
+    if prefix.endswith("__init__.py"):
+        prefix = os.path.dirname(prefix)
+    return prefix
 
-    def __init__(self, package: str) -> None:
-        mod = importlib.import_module(package)
-        self.fn = mod.__file__
-        if self.fn.endswith("__init__.py"):
-            self.fn = os.path.dirname(self.fn)
 
-    def __eq__(self, other: object) -> t.Union[bool, NotImplemented]:
-        if isinstance(other, str):
-            return other.startswith(self.fn)
-        else:
-            return NotImplemented
+def yappi_package_matches(stat, packages: t.List[str]):
+    """ This object can be passed to yappi's filter_callback to limit
+    by Python package."""
+    for package in packages:
+        prefix = get_package_prefix(package)
+        if stat.full_name.startswith(prefix):
+            return True
+    return False
