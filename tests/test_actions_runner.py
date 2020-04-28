@@ -40,7 +40,7 @@ class StoreAction(Trigger[bool]):
 class TestRunner:
     @pytest.fixture
     @pytest.mark.asyncio
-    async def runner(self):
+    async def runner(self, event_loop):
         processor = DataProcessor(
             name="Test data runner", action=StoreAction(), trigger=AlwaysTrueTrigger(),
         )
@@ -64,7 +64,7 @@ class TestRunner:
 class TestRealWorldRunner:
     @pytest.fixture
     @pytest.mark.asyncio
-    async def runner(self, migrated_db):
+    async def runner(self, migrated_db, event_loop):
         processor = DataProcessor(
             name="TemperatureAbove20",
             action=OnlyOnChangeActionWrapper(SaveToDatabaseAction()),
@@ -80,7 +80,7 @@ class TestRealWorldRunner:
         await processor.end()
 
     @pytest.mark.asyncio
-    async def test_real_usecase(self, runner):
+    async def test_real_usecase(self, runner, event_loop):
         data = [
             (datetime.datetime(2020, 4, 1, 12, 0, 0), 19.0),
             (datetime.datetime(2020, 4, 1, 13, 0, 0), 18.0),
