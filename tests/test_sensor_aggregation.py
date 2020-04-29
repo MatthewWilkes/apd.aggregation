@@ -74,9 +74,9 @@ class TestGetDataPoints:
         return apd.aggregation.collect.get_data_points
 
     @pytest.mark.asyncio
-    async def test_get_data_points(
-        self, mut, mockclient: FakeAIOHttpClient, data
-    ) -> None:
+    async def test_get_data_points(self, mut, mockclient, data) -> None:
+        # Mark the mock client as the same type as the one it's mocking
+        # So we can set it into the context variable without warnings
         token = apd.aggregation.collect.http_session_var.set(mockclient)
         try:
             datapoints = await mut("http://localhost", "")
