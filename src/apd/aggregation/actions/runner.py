@@ -57,7 +57,7 @@ class DataProcessor:
                 action_taken = False
                 processed = await self.trigger.handle(data)
                 if processed:
-                    action_taken =await self.action.handle(processed)
+                    action_taken = await self.action.handle(processed)
                 if action_taken:
                     elapsed = time.time() - start
                     self.total_out += 1
