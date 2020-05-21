@@ -2,6 +2,7 @@ from concurrent.futures import ThreadPoolExecutor
 import datetime
 import typing as t
 from unittest.mock import patch, MagicMock
+import uuid
 import wsgiref.simple_server
 
 import aiohttp
@@ -154,35 +155,44 @@ class TestAddDataFromSensors:
         assert len(results) == len(sensors) * 2
 
     @pytest.mark.asyncio
-    async def test_data_points_not_added_if_only_partial_success(
+    async def test_data_points_added_if_only_partial_success(
         self,
         mock_db_session,
         sensors: t.List[Sensor[t.Any]],
         mut,
         http_server: str,
         bad_api_key_http_server: str,
+        caplog,
     ) -> None:
-        with pytest.raises(
-            ValueError,
-            match=f"Error loading data from {bad_api_key_http_server}: Supply API key in X-API-Key header",
-        ):
-            await mut(
-                mock_db_session,
-                [
-                    Deployment(
-                        id=None,
-                        colour=None,
-                        name=None,
-                        uri=http_server,
-                        api_key="testing",
-                    ),
-                    Deployment(
-                        id=None,
-                        colour=None,
-                        name=None,
-                        uri=bad_api_key_http_server,
-                        api_key="testing",
-                    ),
-                ],
-            )
-        assert mock_db_session.execute.call_count == 0
+        await mut(
+            mock_db_session,
+            [
+                Deployment(
+                    id=None, colour=None, name=None, uri=http_server, api_key="testing",
+                ),
+                Deployment(
+                    id=None,
+                    colour=None,
+                    name=None,
+                    uri=bad_api_key_http_server,
+                    api_key="testing",
+                ),
+            ],
+        )
+        # We expect Python Version and AC status for one endpoint
+        assert mock_db_session.execute.call_count == 2
+        insertion_calls = mock_db_session.execute.call_args_list
+        params = [call[0][0].parameters for call in insertion_calls]
+        assert {insertion["sensor_name"] for insertion in params} == {
+            "PythonVersion",
+            "ACStatus",
+        }
+        assert {insertion["deployment_id"] for insertion in params} == {
+            uuid.UUID("a46b1d1207fd4cdcad39bbdf706dfe29"),
+        }
+
+        # We should also have a log message showing details of the failing server and the failure
+        assert len(caplog.records) == 1
+        assert caplog.records[0].message == "Data retrieval failed"
+        assert bad_api_key_http_server in caplog.records[0].exc_text
+        assert "Supply API key in X-API-Key header" in caplog.records[0].exc_text

@@ -1,5 +1,9 @@
 ## Changes
 
+### 2.0.0 (2020-05-21)
+
+* Remove tolerate failures option in favour of always tolerating failures
+
 ### 1.1.0 (2020-05-21)
 
 * Address technical review comments from APD book. Use this version over

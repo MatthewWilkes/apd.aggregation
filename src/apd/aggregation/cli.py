@@ -31,15 +31,9 @@ logger = logging.getLogger(__name__)
     envvar="APD_DB_URI",
 )
 @click.option("--api-key", metavar="<KEY>", envvar="APD_API_KEY")
-@click.option(
-    "--tolerate-failures",
-    "-f",
-    help="If provided, failure to retrieve some sensors' data will not abort the collection process",
-    is_flag=True,
-)
 @click.option("-v", "--verbose", is_flag=True, help="Enables verbose mode")
 def collect_sensor_data(
-    db: str, server: t.Tuple[str], api_key: str, tolerate_failures: bool, verbose: bool
+    db: str, server: t.Tuple[str], api_key: str, verbose: bool
 ) -> t.Optional[int]:
     """This loads data from one or more sensors into the specified database.
 
@@ -54,17 +48,11 @@ def collect_sensor_data(
     to the sensor's HTTP interface, not including the /v/2.0 portion. Multiple
     URLs should be separated with a space.
     """
-    if tolerate_failures:
-        attempts = [(s,) for s in server]
-    else:
-        attempts = [server]
-    success = True
-    for attempt in attempts:
-        try:
-            collect.standalone(db, attempt, api_key, echo=verbose)
-        except ValueError as e:
-            click.secho(str(e), err=True, fg="red")
-            success = False
+    try:
+        collect.standalone(db, server, api_key, echo=verbose)
+    except ValueError as e:
+        click.secho(str(e), err=True, fg="red")
+        success = False
     return success
 
 
