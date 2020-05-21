@@ -1,5 +1,10 @@
 ## Changes
 
+### 1.1.0 (2020-05-21)
+
+* Address technical review comments from APD book. Use this version over
+  the 1.0.0 release.
+
 ### 1.0.0 (2020-01-27)
 
 * Added management of known sensor endpoints
