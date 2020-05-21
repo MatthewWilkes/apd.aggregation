@@ -79,6 +79,18 @@ class TestTemperatureCleaner:
         return analysis.clean_temperature_fluctuations
 
     @pytest.mark.asyncio
+    async def test_nonstandard_serialization(self, cleaner):
+        data = [
+            (
+                datetime.datetime(2020, 4, 1, 12, 0, 0),
+                {"magnitude": 21.0, "unit": "celsius"},
+            ),
+        ]
+        datapoints = generate_datapoints(data)
+        output = [(time, data) async for (time, data) in cleaner(datapoints)]
+        assert output == [(datetime.datetime(2020, 4, 1, 12, 0, 0), 21.0)]
+
+    @pytest.mark.asyncio
     async def test_window_not_full(self, cleaner):
         data = [
             (

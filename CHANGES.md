@@ -4,6 +4,7 @@
 
 * Address technical review comments from APD book. Use this version over
   the 1.0.0 release.
+* Improve compatibility with newer versions of Pint
 
 ### 1.0.0 (2020-01-27)
 

@@ -238,13 +238,17 @@ async def clean_temperature_fluctuations(
     allowed_range = (-40, 80)
     window_datapoints: t.Deque[DataPoint] = collections.deque(maxlen=3)
 
+    celsius_unit = getattr(ureg, "degC")
+
     def datapoint_ok(datapoint: DataPoint) -> bool:
         """Return False if this data point does not contain a valid temperature"""
         if datapoint.data is None:
             return False
-        elif datapoint.data["unit"] != "degC":
+        elif getattr(ureg, datapoint.data["unit"], None) != celsius_unit:
             # This point is in a different temperature system. While it could be converted
             # this cleaner is not yet doing that.
+            # We must, however, check the unit with pint in case we have a nonstandard
+            # serialisation, such as from a different version.
             return False
         elif not allowed_range[0] < datapoint.data["magnitude"] < allowed_range[1]:
             return False
