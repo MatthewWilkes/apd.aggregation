@@ -1,5 +1,9 @@
 ## Changes
 
+### 2.0.1 (Unreleased)
+
+* Improve Python 3.7 compatibility, for easier use on RPis
+
 ### 2.0.0 (2020-05-21)
 
 * Remove tolerate failures option in favour of always tolerating failures

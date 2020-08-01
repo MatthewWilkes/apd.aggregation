@@ -38,7 +38,7 @@ def merc_y(lat: float) -> float:
     return y
 
 
-@functools.lru_cache
+@functools.lru_cache()
 def convert_temperature(magnitude: float, origin_unit: str, target_unit: str) -> float:
     # if origin_unit == "degC" and target_unit == "degF":
     #    return (magnitude * 1.8) + 32
@@ -68,7 +68,7 @@ def profile_with_yappi() -> t.Iterator[None]:
         yappi.stop()
 
 
-@functools.lru_cache
+@functools.lru_cache()
 def get_package_prefix(package: str) -> str:
     mod = importlib.import_module(package)
     prefix = mod.__file__

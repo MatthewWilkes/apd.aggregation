@@ -43,6 +43,13 @@ COORD_FLOAT_CLEANER = CleanerFunc[CLEANED_COORD_FLOAT]
 # That inner dictionary should contain coord (float, float)
 # and value (float) only. Either or both can be None.
 # This class is abstract, it's just for type checking.
-class IntermediateMapData(t.TypedDict):
-    coord: t.Optional[t.Tuple[float, float]]
-    value: t.Optional[float]
+try:
+
+    class IntermediateMapData(t.TypedDict):
+        coord: t.Optional[t.Tuple[float, float]]
+        value: t.Optional[float]
+
+
+except AttributeError:
+    # We don't have TypedDicts
+    IntermediateMapData = t.Dict[str, t.Any]  # type: ignore
