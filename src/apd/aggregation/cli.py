@@ -138,7 +138,7 @@ def run_actions(
             starters = [handler.start() for handler in handlers]
             await asyncio.gather(*starters)
 
-            logger.info(f"Ingesting data")
+            logger.info("Ingesting data")
             data = get_data_ongoing(historical=historical)
 
             signal_handler = functools.partial(stats_signal_handler, handlers=handlers,)
