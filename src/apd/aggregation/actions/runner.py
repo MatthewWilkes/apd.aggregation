@@ -27,7 +27,7 @@ class DataProcessor:
 
     async def start(self) -> None:
         self._input = asyncio.Queue(64)
-        self._task = asyncio.create_task(self.process(), name=f"{self.name}_process")
+        self._task = asyncio.create_task(self.process())
         await asyncio.gather(self.action.start(), self.trigger.start())
 
     @property
