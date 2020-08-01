@@ -29,6 +29,7 @@ jobs:
         pipenv sync --dev
     - name: Lint with flake8
       run: |
+        pipenv run pip install flake8~=${{ matrix.python-version }}
         pipenv run flake8 . --count --show-source --statistics
     - name: Lint with black
       run: |
