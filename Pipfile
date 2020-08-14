@@ -15,7 +15,8 @@ wheel = "*"
 twine = "*"
 sqlalchemy-stubs = "*"
 yappi = "*"
-apd-sensors = {extras = ["webapp"], version="*"}
+matplotlib = "*"
+apd-sensors = {extras = ["webapp"],version = "*"}
 
 [packages]
 apd-aggregation = {editable = true,extras = ["jupyter"],path = "."}
