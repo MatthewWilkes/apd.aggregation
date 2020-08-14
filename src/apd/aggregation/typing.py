@@ -1,6 +1,11 @@
 import datetime
+import sys
 import typing as t
-from typing_extensions import Protocol
+
+if sys.version_info >= (3, 8):
+    from typing import TypedDict, Protocol
+else:
+    from typing_extensions import TypedDict, Protocol
 
 from apd.aggregation.database import DataPoint
 
@@ -39,17 +44,6 @@ DT_FLOAT_CLEANER = CleanerFunc[CLEANED_DT_FLOAT]
 COORD_FLOAT_CLEANER = CleanerFunc[CLEANED_COORD_FLOAT]
 
 
-# When drawing a map we will be building a dictionary of UUID to dictionary
-# That inner dictionary should contain coord (float, float)
-# and value (float) only. Either or both can be None.
-# This class is abstract, it's just for type checking.
-try:
-
-    class IntermediateMapData(t.TypedDict):
-        coord: t.Optional[t.Tuple[float, float]]
-        value: t.Optional[float]
-
-
-except AttributeError:
-    # We don't have TypedDicts
-    IntermediateMapData = t.Dict[str, t.Any]  # type: ignore
+class IntermediateMapData(TypedDict):
+    coord: t.Optional[t.Tuple[float, float]]
+    value: t.Optional[float]
