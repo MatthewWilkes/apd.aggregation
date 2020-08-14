@@ -7,6 +7,7 @@ import wsgiref.simple_server
 
 import aiohttp
 from apd.sensors.base import Sensor
+from apd.sensors.exceptions import DataCollectionError
 from apd.sensors.sensors import PythonVersion, ACStatus
 from apd.sensors.wsgi import set_up_config
 import flask
@@ -95,7 +96,10 @@ class TestGetDataPoints:
         assert len(results) == len(sensors) == 2
 
         for (sensor, result) in zip(sensors, results):
-            assert sensor.from_json_compatible(result.data) == sensor.value()
+            try:
+                assert sensor.from_json_compatible(result.data) == sensor.value()
+            except DataCollectionError:
+                continue
             assert result.sensor_name == sensor.name
             assert time_before <= result.collected_at <= time_after
 
