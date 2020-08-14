@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 @click.option("-v", "--verbose", is_flag=True, help="Enables verbose mode")
 def collect_sensor_data(
     db: str, server: t.Tuple[str], api_key: str, verbose: bool
-) -> t.Optional[int]:
+) -> None:
     """This loads data from one or more sensors into the specified database.
 
     Only PostgreSQL databases are supported, as the column definitions use
@@ -48,12 +48,14 @@ def collect_sensor_data(
     to the sensor's HTTP interface, not including the /v/2.0 portion. Multiple
     URLs should be separated with a space.
     """
+    success = True
     try:
         collect.standalone(db, server, api_key, echo=verbose)
     except ValueError as e:
         click.secho(str(e), err=True, fg="red")
         success = False
-    return success
+    if not success:
+        sys.exit(1)
 
 
 def load_handler_config(path: str) -> t.List[DataProcessor]:
@@ -114,7 +116,7 @@ def install_ctrl_c_signal_handler(signal_handler):
 @click.option("-v", "--verbose", is_flag=True, help="Enables verbose mode")
 def run_actions(
     config: str, db: str, verbose: bool, historical: bool
-) -> t.Optional[int]:
+):
     """This runs the long-running action processors defined in a config file.
 
     The configuration file specified should be a Python file that defines a
@@ -154,7 +156,6 @@ def run_actions(
                     await handler.push(datapoint)
 
     asyncio.run(main_loop())
-    return True
 
 
 @click.group()
@@ -176,7 +177,7 @@ def deployments():
 @click.option("--colour")
 def add(
     db: str, uri: str, name: str, api_key: t.Optional[str], colour: t.Optional[str],
-):
+) -> None:
     """This creates a record of a new deployment in the database.
     """
     deployment = Deployment(id=None, uri=uri, name=name, api_key=api_key, colour=colour)
@@ -194,7 +195,6 @@ def add(
     Session = sm()
     Session.execute(insert)
     Session.commit()
-    return True
 
 
 @deployments.command()
@@ -205,7 +205,7 @@ def add(
     help="The connection string to a PostgreSQL database",
     envvar="APD_DB_URI",
 )
-def list(db: str):
+def list(db: str) -> None:
     """This creates a record of a new deployment in the database.
     """
     engine = create_engine(db)
@@ -220,7 +220,6 @@ def list(db: str):
         click.echo(click.style("Colour ", bold=True) + str(deployment.colour))
         click.echo()
     Session.rollback()
-    return True
 
 
 @deployments.command()
@@ -243,7 +242,7 @@ def edit(
     name: t.Optional[str],
     api_key: t.Optional[str],
     colour: t.Optional[str],
-):
+) -> None:
     """This creates a record of a new deployment in the database.
     """
     update = {}
@@ -279,5 +278,3 @@ def edit(
         click.echo(click.style("API key ", bold=True) + deployment.api_key)
         click.echo(click.style("Colour ", bold=True) + str(deployment.colour))
         click.echo()
-
-    return True
