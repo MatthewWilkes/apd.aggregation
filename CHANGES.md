@@ -1,6 +1,6 @@
 ## Changes
 
-### 2.0.1 (Unreleased)
+### 2.0.1 (2020-08-14)
 
 * Improve Python 3.7 compatibility, for easier use on RPis
 
