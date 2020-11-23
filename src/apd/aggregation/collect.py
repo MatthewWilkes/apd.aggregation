@@ -32,7 +32,10 @@ async def get_deployment_id(server):
         raise ValueError(f"Error loading deployment id from {server}") from err
 
 
-async def get_data_points(server: str, api_key: t.Optional[str],) -> t.List[DataPoint]:
+async def get_data_points(
+    server: str,
+    api_key: t.Optional[str],
+) -> t.List[DataPoint]:
     if not server.endswith("/"):
         server += "/"
     url = server + "v/2.1/sensors/"
@@ -66,6 +69,54 @@ async def get_data_points(server: str, api_key: t.Optional[str],) -> t.List[Data
                 DataPoint(
                     sensor_name=value["id"],
                     collected_at=now,
+                    data=value["value"],
+                    deployment_id=deployment_id,
+                )
+            )
+        return points
+    else:
+        raise ValueError(
+            f"Error loading data from {server}: " + result.get("error", "Unknown")
+        )
+
+
+async def get_historical_data_points_since(
+    server: str, api_key: t.Optional[str], since: datetime.datetime
+) -> t.List[DataPoint]:
+    if not server.endswith("/"):
+        server += "/"
+    url = server + f"v/3.0/historical/{since.date().isoformat()}"
+    headers = {}
+    if api_key:
+        headers["X-API-KEY"] = api_key
+    http = http_session_var.get()
+
+    # Get the deployment ID in parallel to the sensor data
+    deployment_id_task = asyncio.create_task(get_deployment_id(server))
+
+    try:
+        async with http.get(url, headers=headers) as request:
+            ok = request.status == 200
+            try:
+                result = await request.json()
+            except aiohttp.ContentTypeError:
+                raise ValueError(
+                    f"Error loading data from {server}: Server response {await request.text()}"
+                )
+    except aiohttp.ClientError as err:
+        # The HTTP request to get the sensor data failed
+        raise ValueError(f"Error loading data from {server}") from err
+
+    if ok:
+        points = []
+        deployment_id = await deployment_id_task
+        for value in result["sensors"]:
+            if value["collected_at"] < since.isoformat():
+                continue
+            points.append(
+                DataPoint(
+                    sensor_name=value["id"],
+                    collected_at=value["collected_at"],
                     data=value["value"],
                     deployment_id=deployment_id,
                 )

@@ -6,14 +6,14 @@ import uuid
 import wsgiref.simple_server
 
 import aiohttp
-from apd.sensors.base import Sensor
+from apd.sensors.base import Sensor, HistoricalSensor, JSONSensor
 from apd.sensors.exceptions import DataCollectionError
 from apd.sensors.sensors import PythonVersion, ACStatus
 from apd.sensors.wsgi import set_up_config
 import flask
 import pytest
 
-from apd.sensors.wsgi import v21
+from apd.sensors.wsgi import v21, v30
 
 from apd.aggregation import collect
 from apd.aggregation.database import Deployment
@@ -31,10 +31,11 @@ def sensors() -> t.Iterator[t.List[Sensor[t.Any]]]:
 
 
 def get_independent_flask_app(name: str) -> flask.Flask:
-    """ Create a new flask app with the v20 API blueprint loaded, so multiple copies
-    of the app can be run in parallel without conflicting configuration """
+    """Create a new flask app with the v20 API blueprint loaded, so multiple copies
+    of the app can be run in parallel without conflicting configuration"""
     app = flask.Flask(name)
     app.register_blueprint(v21.version, url_prefix="/v/2.1")
+    app.register_blueprint(v30.version, url_prefix="/v/3.0")
     return app
 
 
@@ -116,6 +117,66 @@ class TestGetDataPoints:
                 await mut(http_server, "incorrect")
 
 
+class TestGetHistoricalDataPoints:
+    @pytest.fixture
+    def sensors(self) -> t.Iterator[t.List[Sensor[t.Any]]]:
+        """ Patch the get_sensors method to return a simple fake historical sensor """
+
+        class FakeHistoricalSensor(HistoricalSensor[int], JSONSensor[int]):
+            name = "fake"
+            title = "Fake Sensor"
+
+            def value(self):
+                return 0
+
+            def format(self, value):
+                return str(value)
+
+            def historical(self, start_dt, end_dt):
+                point = start_dt
+                while point < end_dt:
+                    yield point, point.minute
+                    point += datetime.timedelta(minutes=1)
+
+        data: t.List[Sensor[t.Any]] = [FakeHistoricalSensor()]
+        with patch("apd.sensors.cli.get_sensors") as get_sensors:
+            get_sensors.return_value = data
+            yield data
+
+    @pytest.fixture
+    def mut(self):
+        return collect.get_historical_data_points_since
+
+    @pytest.mark.asyncio
+    async def test_get_historical_data_points_since(
+        self, sensors: t.List[Sensor[t.Any]], mut, http_server: str
+    ) -> None:
+        async with aiohttp.ClientSession() as http:
+            collect.http_session_var.set(http)
+            results = await mut(
+                http_server,
+                "testing",
+                datetime.datetime.now() - datetime.timedelta(hours=1),
+            )
+        assert len(results) == 60
+
+    @pytest.mark.asyncio
+    async def test_get_historical_data_points_since_fails_with_bad_api_key(
+        self, sensors: t.List[Sensor[t.Any]], mut, http_server: str
+    ) -> None:
+        with pytest.raises(
+            ValueError,
+            match=f"Error loading data from {http_server}: Supply API key in X-API-Key header",
+        ):
+            async with aiohttp.ClientSession() as http:
+                collect.http_session_var.set(http)
+                await mut(
+                    http_server,
+                    "incorrect",
+                    datetime.datetime.now() - datetime.timedelta(hours=1),
+                )
+
+
 class TestAddDataFromSensors:
     @pytest.fixture
     def mut(self):
@@ -172,7 +233,11 @@ class TestAddDataFromSensors:
             mock_db_session,
             [
                 Deployment(
-                    id=None, colour=None, name=None, uri=http_server, api_key="testing",
+                    id=None,
+                    colour=None,
+                    name=None,
+                    uri=http_server,
+                    api_key="testing",
                 ),
                 Deployment(
                     id=None,
