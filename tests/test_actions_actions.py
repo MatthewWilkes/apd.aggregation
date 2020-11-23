@@ -1,5 +1,5 @@
 import datetime
-import unittest.mock
+import mock
 
 import pytest
 
@@ -21,7 +21,7 @@ class TestOnlyAfterDateActionWrapper:
 
     @pytest.mark.asyncio
     async def test_minimum_date_before_passing(self, subject):
-        wrapped = unittest.mock.Mock(spec=Action)
+        wrapped = mock.Mock(spec=Action)
         wrapper = subject(
             wrapped, date_threshold=datetime.datetime(2020, 4, 1, 14, 0, 0)
         )
@@ -52,7 +52,7 @@ class TestOnlyOnChangeActionWrapper:
 
     @pytest.mark.asyncio
     async def test_initial_value_always_passed(self, subject):
-        wrapped = unittest.mock.Mock(spec=Action)
+        wrapped = mock.Mock(spec=Action)
         wrapper = subject(wrapped)
         await wrapper.start()
 
@@ -67,7 +67,7 @@ class TestOnlyOnChangeActionWrapper:
 
     @pytest.mark.asyncio
     async def test_subsequent_values_only_passed_when_differing(self, subject):
-        wrapped = unittest.mock.Mock(spec=Action)
+        wrapped = mock.Mock(spec=Action)
         wrapper = subject(wrapped)
         await wrapper.start()
 

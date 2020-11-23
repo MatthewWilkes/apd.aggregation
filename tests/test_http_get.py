@@ -1,7 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 import datetime
 import typing as t
-from unittest.mock import patch, MagicMock
+from mock import patch, MagicMock
 import uuid
 import wsgiref.simple_server
 
@@ -186,12 +186,12 @@ class TestAddDataFromSensors:
         # We expect Python Version and AC status for one endpoint
         assert mock_db_session.execute.call_count == 2
         insertion_calls = mock_db_session.execute.call_args_list
-        params = [call[0][0].parameters for call in insertion_calls]
-        assert {insertion["sensor_name"] for insertion in params} == {
+        params = [call[0][0]._values for call in insertion_calls]
+        assert {insertion["sensor_name"].value for insertion in params} == {
             "PythonVersion",
             "ACStatus",
         }
-        assert {insertion["deployment_id"] for insertion in params} == {
+        assert {insertion["deployment_id"].value for insertion in params} == {
             uuid.UUID("a46b1d1207fd4cdcad39bbdf706dfe29"),
         }
 

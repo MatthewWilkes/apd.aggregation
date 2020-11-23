@@ -4,7 +4,7 @@ import contextlib
 from dataclasses import dataclass
 import json
 import typing as t
-from unittest.mock import patch, Mock
+from mock import patch, Mock
 
 import pytest
 import sqlalchemy

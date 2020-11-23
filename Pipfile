@@ -17,6 +17,7 @@ sqlalchemy-stubs = "*"
 yappi = "*"
 matplotlib = "*"
 apd-sensors = {extras = ["webapp"],version = "*"}
+mock = "*"
 
 [packages]
 apd-aggregation = {editable = true,extras = ["jupyter"],path = "."}
