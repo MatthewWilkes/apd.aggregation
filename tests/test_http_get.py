@@ -10,13 +10,14 @@ from apd.sensors.base import Sensor, HistoricalSensor, JSONSensor
 from apd.sensors.exceptions import DataCollectionError
 from apd.sensors.sensors import PythonVersion, ACStatus
 from apd.sensors.wsgi import set_up_config
+from apd.sensors.wsgi import v31
 import flask
 import pytest
-
-from apd.sensors.wsgi import v21, v30
+from sqlalchemy.sql import Insert
 
 from apd.aggregation import collect
 from apd.aggregation.database import Deployment
+from .utils import FakeHistoricalSensor, run_server_in_thread
 
 pytestmark = [pytest.mark.functional]
 
@@ -28,41 +29,6 @@ def sensors() -> t.Iterator[t.List[Sensor[t.Any]]]:
     with patch("apd.sensors.cli.get_sensors") as get_sensors:
         get_sensors.return_value = data
         yield data
-
-
-def get_independent_flask_app(name: str) -> flask.Flask:
-    """Create a new flask app with the v20 API blueprint loaded, so multiple copies
-    of the app can be run in parallel without conflicting configuration"""
-    app = flask.Flask(name)
-    app.register_blueprint(v21.version, url_prefix="/v/2.1")
-    app.register_blueprint(v30.version, url_prefix="/v/3.0")
-    return app
-
-
-def run_server_in_thread(
-    name: str, config: t.Dict[str, t.Any], port: int
-) -> t.Iterator[str]:
-    # Create a new flask app and load in required code, to prevent config conflicts
-    app = get_independent_flask_app(name)
-    flask_app = set_up_config(config, app)
-    server = wsgiref.simple_server.make_server("localhost", port, flask_app)
-
-    with ThreadPoolExecutor() as pool:
-        pool.submit(server.serve_forever)
-        yield f"http://localhost:{port}/"
-        server.shutdown()
-
-
-@pytest.fixture(scope="module")
-def http_server():
-    yield from run_server_in_thread(
-        "standard",
-        {
-            "APD_SENSORS_API_KEY": "testing",
-            "APD_SENSORS_DEPLOYMENT_ID": "a46b1d1207fd4cdcad39bbdf706dfe29",
-        },
-        12081,
-    )
 
 
 @pytest.fixture(scope="module")
@@ -117,26 +83,29 @@ class TestGetDataPoints:
                 await mut(http_server, "incorrect")
 
 
+class TestGetKnownSensors:
+    @pytest.fixture
+    def mut(self):
+        return collect.get_known_sensors
+
+    @pytest.mark.asyncio
+    async def test_get_known_sensors(
+        self, sensors: t.List[Sensor[t.Any]], mut, http_server: str
+    ) -> None:
+        async with aiohttp.ClientSession() as http:
+            collect.http_session_var.set(http)
+            results = await mut(
+                http_server,
+                "testing",
+            )
+        assert len(results) == 2
+        print(results)
+
+
 class TestGetHistoricalDataPoints:
     @pytest.fixture
     def sensors(self) -> t.Iterator[t.List[Sensor[t.Any]]]:
         """ Patch the get_sensors method to return a simple fake historical sensor """
-
-        class FakeHistoricalSensor(HistoricalSensor[int], JSONSensor[int]):
-            name = "fake"
-            title = "Fake Sensor"
-
-            def value(self):
-                return 0
-
-            def format(self, value):
-                return str(value)
-
-            def historical(self, start_dt, end_dt):
-                point = start_dt
-                while point < end_dt:
-                    yield point, point.minute
-                    point += datetime.timedelta(minutes=1)
 
         data: t.List[Sensor[t.Any]] = [FakeHistoricalSensor()]
         with patch("apd.sensors.cli.get_sensors") as get_sensors:
@@ -156,9 +125,10 @@ class TestGetHistoricalDataPoints:
             results = await mut(
                 http_server,
                 "testing",
-                datetime.datetime.now() - datetime.timedelta(hours=1),
+                datetime.datetime.now() - datetime.timedelta(hours=5),
+                "fake",
             )
-        assert len(results) == 60
+        assert len(results) == 5
 
     @pytest.mark.asyncio
     async def test_get_historical_data_points_since_fails_with_bad_api_key(
@@ -174,7 +144,54 @@ class TestGetHistoricalDataPoints:
                     http_server,
                     "incorrect",
                     datetime.datetime.now() - datetime.timedelta(hours=1),
+                    "fake",
                 )
+
+
+class TestCollectBothSensorTypes:
+    @pytest.fixture
+    def sensors(self) -> t.Iterator[t.List[Sensor[t.Any]]]:
+        """ Patch the get_sensors method to return a simple fake historical sensor """
+        data: t.List[Sensor[t.Any]] = [FakeHistoricalSensor(), PythonVersion()]
+        with patch("apd.sensors.cli.get_sensors") as get_sensors:
+            get_sensors.return_value = data
+            yield data
+
+    @pytest.fixture
+    def mut(self):
+        return collect.add_data_from_sensors
+
+    @pytest.fixture
+    def mock_db_session(self):
+        return MagicMock()
+
+    @pytest.mark.asyncio
+    async def test_collect_data(
+        self, sensors: t.List[Sensor[t.Any]], mut, http_server: str, mock_db_session
+    ) -> None:
+        async with aiohttp.ClientSession() as http:
+            collect.http_session_var.set(http)
+            with patch(
+                "apd.aggregation.collect.most_recent_data_point_for_sensor_and_server"
+            ) as most_recent:
+                most_recent.return_value = datetime.datetime.now() - datetime.timedelta(
+                    hours=40
+                )
+                results = await mut(
+                    mock_db_session,
+                    [
+                        Deployment(
+                            id=uuid.uuid4(),
+                            uri=http_server,
+                            name="Test Server",
+                            colour=None,
+                            api_key="testing",
+                        ),
+                    ],
+                )
+
+        # We expect 1 current fake result, 1 current python version, and n historical, where n is 40 here
+        assert len(results) == 42
 
 
 class TestAddDataFromSensors:
@@ -198,7 +215,7 @@ class TestAddDataFromSensors:
                 )
             ],
         )
-        assert mock_db_session.execute.call_count == len(sensors)
+        assert mock_db_session.execute.call_count == len(sensors) * 2
         assert len(results) == len(sensors)
 
     @pytest.mark.asyncio
@@ -216,7 +233,7 @@ class TestAddDataFromSensors:
                 ),
             ],
         )
-        assert mock_db_session.execute.call_count == len(sensors) * 2
+        assert mock_db_session.execute.call_count == len(sensors) * 4
         assert len(results) == len(sensors) * 2
 
     @pytest.mark.asyncio
@@ -249,9 +266,14 @@ class TestAddDataFromSensors:
             ],
         )
         # We expect Python Version and AC status for one endpoint
-        assert mock_db_session.execute.call_count == 2
+        assert mock_db_session.execute.call_count == 4
         insertion_calls = mock_db_session.execute.call_args_list
-        params = [call[0][0]._values for call in insertion_calls]
+
+        params = [
+            call[0][0]._values
+            for call in insertion_calls
+            if isinstance(call[0][0], Insert)
+        ]
         assert {insertion["sensor_name"].value for insertion in params} == {
             "PythonVersion",
             "ACStatus",

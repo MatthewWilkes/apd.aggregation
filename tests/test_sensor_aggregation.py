@@ -60,8 +60,8 @@ class FakeAIOHttpResponse:
 def mockclient(data) -> FakeAIOHttpClient:
     return FakeAIOHttpClient(
         {
-            "http://localhost/v/2.1/sensors/": json.dumps(data),
-            "http://localhost/v/2.1/deployment_id": json.dumps(
+            "http://localhost/v/3.1/sensors/": json.dumps(data),
+            "http://localhost/v/3.1/deployment_id": json.dumps(
                 {"deployment_id": "b29ba0ee10f14552b6b21327bb96d3fb"}
             ),
         }

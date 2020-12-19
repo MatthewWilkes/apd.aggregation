@@ -9,6 +9,7 @@ import aiohttp
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm.session import Session
+from sqlalchemy.dialects.postgresql import insert
 
 from .database import DataPoint, datapoint_table, Deployment, deployment_table
 
@@ -21,7 +22,7 @@ async def get_deployment_id(server):
     http = http_session_var.get()
     if not server.endswith("/"):
         server += "/"
-    url = server + "v/2.1/deployment_id"
+    url = server + "v/3.1/deployment_id"
     try:
         async with http.get(url) as request:
             if request.status != 200:
@@ -38,7 +39,7 @@ async def get_data_points(
 ) -> t.List[DataPoint]:
     if not server.endswith("/"):
         server += "/"
-    url = server + "v/2.1/sensors/"
+    url = server + "v/3.1/sensors/"
     headers = {}
     if api_key:
         headers["X-API-KEY"] = api_key
@@ -80,12 +81,45 @@ async def get_data_points(
         )
 
 
+async def get_known_sensors(server: str, api_key: t.Optional[str]) -> t.List[str]:
+    if not server.endswith("/"):
+        server += "/"
+    url = server + "v/3.1/info/sensors"
+    headers = {}
+    if api_key:
+        headers["X-API-KEY"] = api_key
+    http = http_session_var.get()
+
+    try:
+        async with http.get(url, headers=headers) as request:
+            ok = request.status == 200
+            try:
+                result = await request.json()
+            except aiohttp.ContentTypeError:
+                raise ValueError(
+                    f"Error loading data from {server}: Server response {await request.text()}"
+                )
+    except aiohttp.ClientError as err:
+        # The HTTP request to get the sensor data failed
+        raise ValueError(f"Error loading data from {server}") from err
+
+    if ok:
+        return result
+    else:
+        raise ValueError(
+            f"Error loading data from {server}: " + result.get("error", "Unknown")
+        )
+
+
 async def get_historical_data_points_since(
-    server: str, api_key: t.Optional[str], since: datetime.datetime
+    server: str,
+    api_key: t.Optional[str],
+    since: datetime.datetime,
+    sensor_name: str,
 ) -> t.List[DataPoint]:
     if not server.endswith("/"):
         server += "/"
-    url = server + f"v/3.0/historical/{since.date().isoformat()}"
+    url = server + f"v/3.1/sensors/{sensor_name}/historical/{since.date().isoformat()}"
     headers = {}
     if api_key:
         headers["X-API-KEY"] = api_key
@@ -130,10 +164,40 @@ async def get_historical_data_points_since(
 
 def handle_result(result: t.List[DataPoint], session: Session) -> t.List[DataPoint]:
     for point in result:
-        insert = datapoint_table.insert().values(**point._asdict())
-        sql_result = session.execute(insert)
+        insert_stmt = (
+            insert(datapoint_table)
+            .values(**point._asdict())
+            .on_conflict_do_update(
+                constraint="unique_reading", set_={"data": point.data}
+            )
+        )
+        sql_result = session.execute(insert_stmt)
         point.id = sql_result.inserted_primary_key[0]
     return result
+
+
+def most_recent_data_point_for_sensor_and_server(
+    server: uuid.UUID, sensor_name: str, session: Session
+) -> t.Optional[datetime.datetime]:
+    get = (
+        datapoint_table.select()
+        .where(
+            datapoint_table.c.deployment_id == server,
+            datapoint_table.c.sensor_name == sensor_name,
+        )
+        .order_by(datapoint_table.c.collected_at.desc())
+        .limit(1)
+    )
+    sql_result = session.execute(get)
+    value = sql_result.first()
+    if value is None:
+        return None
+    else:
+        value = value["collected_at"]
+    if isinstance(value, datetime.datetime):
+        return value
+    else:
+        return None
 
 
 async def add_data_from_sensors(
@@ -141,16 +205,41 @@ async def add_data_from_sensors(
 ) -> t.List[DataPoint]:
     tasks: t.List[t.Awaitable[t.List[DataPoint]]] = []
     points: t.List[DataPoint] = []
+    loop = asyncio.get_running_loop()
+
     async with aiohttp.ClientSession() as http:
         http_session_var.set(http)
         tasks = [get_data_points(server.uri, server.api_key) for server in servers]
+        for server in servers:
+            try:
+                sensors_on_server = await get_known_sensors(server.uri, server.api_key)
+            except ValueError:
+                continue
+            for sensor_name in sensors_on_server:
+                latest = await loop.run_in_executor(
+                    None,
+                    most_recent_data_point_for_sensor_and_server,
+                    server.id,
+                    sensor_name,
+                    session,
+                )
+                if not latest:
+                    latest = datetime.datetime.now() - datetime.timedelta(days=28)
+                tasks.append(
+                    get_historical_data_points_since(
+                        server.uri,
+                        server.api_key,
+                        latest + datetime.timedelta(minutes=1),
+                        sensor_name,
+                    )
+                )
+
         for results in await asyncio.gather(*tasks, return_exceptions=True):
             if isinstance(results, Exception):
                 # This server failed, log the error and continue
                 logger.error("Data retrieval failed", exc_info=results)
                 continue
             points += results
-    loop = asyncio.get_running_loop()
     await loop.run_in_executor(None, handle_result, points, session)
     return points
 

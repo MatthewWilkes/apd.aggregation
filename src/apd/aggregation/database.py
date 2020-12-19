@@ -32,6 +32,9 @@ datapoint_table = Table(
     sqlalchemy.Column("collected_at", TIMESTAMP, index=True),
     sqlalchemy.Column("deployment_id", UUID(as_uuid=True), index=True),
     sqlalchemy.Column("data", JSONB),
+    sqlalchemy.UniqueConstraint(
+        "sensor_name", "collected_at", "deployment_id", name="unique_reading"
+    ),
 )
 
 daily_summary_view = Table(
@@ -54,7 +57,8 @@ class DateEqualComparator(ExprComparator):
         """ Returns True iff on the same day as other """
         other_date = sqlalchemy.cast(other, DATE)
         return sqlalchemy.and_(
-            self.raw_expression >= other_date, self.raw_expression < other_date + 1,
+            self.raw_expression >= other_date,
+            self.raw_expression < other_date + 1,
         )
 
     def operate(self, op, *other, **kwargs):

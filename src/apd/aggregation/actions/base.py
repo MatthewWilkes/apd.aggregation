@@ -13,14 +13,14 @@ class Trigger(t.Generic[T_value]):
         return
 
     async def match(self, datapoint: DataPoint) -> bool:
-        """ Return True if the datapoint is of interest to this
+        """Return True if the datapoint is of interest to this
         trigger.
         This is an optional method, called by the default implementation
         of handle(...)."""
         raise NotImplementedError
 
     async def extract(self, datapoint: DataPoint) -> T_value:
-        """ Return the value that this datapoint implies for this trigger,
+        """Return the value that this datapoint implies for this trigger,
         or raise NoDataForTrigger if no value is appropriate.
         Can also raise IncompatibleTriggerError if the value is not readable.
 
@@ -57,6 +57,6 @@ class Action:
         return
 
     async def handle(self, datapoint: DataPoint) -> bool:
-        """ Apply this datapoint to the action, returning
-        a boolean to indicate success. """
+        """Apply this datapoint to the action, returning
+        a boolean to indicate success."""
         raise NotImplementedError

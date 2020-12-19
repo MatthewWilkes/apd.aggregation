@@ -114,7 +114,7 @@ def draw_map(
     plot.set_aspect(1.0)
 
 
-def get_map_cleaner_for(sensor_name: str,) -> COORD_FLOAT_CLEANER:
+def get_map_cleaner_for(sensor_name: str) -> COORD_FLOAT_CLEANER:
     """Given a sensor_name that represents a float, return a coroutine that acts as a cleaner
     extracting that sensor's data keyed by the value of a Location sensor."""
 
@@ -221,9 +221,9 @@ async def clean_magnitude(
 
 
 def convert_temperature_system(
-    cleaner: DT_FLOAT_CLEANER, temperature_unit: str,
+    cleaner: DT_FLOAT_CLEANER, temperature_unit: str
 ) -> DT_FLOAT_CLEANER:
-    async def converter(datapoints: t.AsyncIterator[DataPoint],) -> CLEANED_DT_FLOAT:
+    async def converter(datapoints: t.AsyncIterator[DataPoint]) -> CLEANED_DT_FLOAT:
         results = cleaner(datapoints)
         async for date, temp_c in results:
             yield date, convert_temperature(temp_c, "degC", temperature_unit)

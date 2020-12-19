@@ -114,9 +114,7 @@ def install_ctrl_c_signal_handler(signal_handler):
     help="Also trigger actions for data points that were already present in the database",
 )
 @click.option("-v", "--verbose", is_flag=True, help="Enables verbose mode")
-def run_actions(
-    config: str, db: str, verbose: bool, historical: bool
-):
+def run_actions(config: str, db: str, verbose: bool, historical: bool):
     """This runs the long-running action processors defined in a config file.
 
     The configuration file specified should be a Python file that defines a
@@ -143,7 +141,10 @@ def run_actions(
             logger.info("Ingesting data")
             data = get_data_ongoing(historical=historical)
 
-            signal_handler = functools.partial(stats_signal_handler, handlers=handlers,)
+            signal_handler = functools.partial(
+                stats_signal_handler,
+                handlers=handlers,
+            )
 
             for signal_name in "SIGINFO", "SIGUSR1", "SIGINT":
                 try:
@@ -176,10 +177,13 @@ def deployments():
 @click.option("--api-key", metavar="<KEY>", envvar="APD_API_KEY")
 @click.option("--colour")
 def add(
-    db: str, uri: str, name: str, api_key: t.Optional[str], colour: t.Optional[str],
+    db: str,
+    uri: str,
+    name: str,
+    api_key: t.Optional[str],
+    colour: t.Optional[str],
 ) -> None:
-    """This creates a record of a new deployment in the database.
-    """
+    """This creates a record of a new deployment in the database."""
     deployment = Deployment(id=None, uri=uri, name=name, api_key=api_key, colour=colour)
 
     async def http_get_deployment_id():
@@ -206,8 +210,7 @@ def add(
     envvar="APD_DB_URI",
 )
 def list(db: str) -> None:
-    """This creates a record of a new deployment in the database.
-    """
+    """This creates a record of a new deployment in the database."""
     engine = create_engine(db)
     sm = sessionmaker(engine)
     Session = sm()
@@ -243,8 +246,7 @@ def edit(
     api_key: t.Optional[str],
     colour: t.Optional[str],
 ) -> None:
-    """This creates a record of a new deployment in the database.
-    """
+    """This creates a record of a new deployment in the database."""
     update = {}
     if uri is not None:
         update["uri"] = uri

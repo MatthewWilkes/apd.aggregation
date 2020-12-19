@@ -9,6 +9,8 @@ from alembic.script import ScriptDirectory
 from alembic.runtime.environment import EnvironmentContext
 import pytest
 
+from .utils import run_server_in_thread
+
 
 @pytest.fixture
 def db_uri():
@@ -125,3 +127,22 @@ def populated_db(migrated_db, db_session):
     for data in datas:
         insert = datapoint_table.insert().values(**data)
         db_session.execute(insert)
+
+
+@pytest.fixture
+def api_key():
+    return "testing"
+
+
+@pytest.fixture
+def http_server(api_key):
+    import random
+
+    yield from run_server_in_thread(
+        "standard",
+        {
+            "APD_SENSORS_API_KEY": api_key,
+            "APD_SENSORS_DEPLOYMENT_ID": "a46b1d1207fd4cdcad39bbdf706dfe29",
+        },
+        random.randint(12000, 13000),
+    )

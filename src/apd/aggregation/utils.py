@@ -78,7 +78,7 @@ def get_package_prefix(package: str) -> str:
 
 
 def yappi_package_matches(stat, packages: t.List[str]):
-    """ This object can be passed to yappi's filter_callback to limit
+    """This object can be passed to yappi's filter_callback to limit
     by Python package."""
     for package in packages:
         prefix = get_package_prefix(package)
