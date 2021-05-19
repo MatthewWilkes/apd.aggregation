@@ -32,7 +32,10 @@ async def get_deployment_id(server):
         raise ValueError(f"Error loading deployment id from {server}") from err
 
 
-async def get_data_points(server: str, api_key: t.Optional[str],) -> t.List[DataPoint]:
+async def get_data_points(
+    server: str,
+    api_key: t.Optional[str],
+) -> t.List[DataPoint]:
     if not server.endswith("/"):
         server += "/"
     url = server + "v/2.1/sensors/"

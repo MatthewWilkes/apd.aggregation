@@ -23,7 +23,7 @@ pytestmark = [pytest.mark.functional]
 
 @pytest.fixture
 def sensors() -> t.Iterator[t.List[Sensor[t.Any]]]:
-    """ Patch the get_sensors method to return a known pair of sensors only """
+    """Patch the get_sensors method to return a known pair of sensors only"""
     data: t.List[Sensor[t.Any]] = [PythonVersion(), ACStatus()]
     with patch("apd.sensors.cli.get_sensors") as get_sensors:
         get_sensors.return_value = data
@@ -31,8 +31,8 @@ def sensors() -> t.Iterator[t.List[Sensor[t.Any]]]:
 
 
 def get_independent_flask_app(name: str) -> flask.Flask:
-    """ Create a new flask app with the v20 API blueprint loaded, so multiple copies
-    of the app can be run in parallel without conflicting configuration """
+    """Create a new flask app with the v20 API blueprint loaded, so multiple copies
+    of the app can be run in parallel without conflicting configuration"""
     app = flask.Flask(name)
     app.register_blueprint(v21.version, url_prefix="/v/2.1")
     return app
@@ -172,7 +172,11 @@ class TestAddDataFromSensors:
             mock_db_session,
             [
                 Deployment(
-                    id=None, colour=None, name=None, uri=http_server, api_key="testing",
+                    id=None,
+                    colour=None,
+                    name=None,
+                    uri=http_server,
+                    api_key="testing",
                 ),
                 Deployment(
                     id=None,

@@ -42,7 +42,9 @@ class TestRunner:
     @pytest.mark.asyncio
     async def runner(self, event_loop):
         processor = DataProcessor(
-            name="Test data runner", action=StoreAction(), trigger=AlwaysTrueTrigger(),
+            name="Test data runner",
+            action=StoreAction(),
+            trigger=AlwaysTrueTrigger(),
         )
         await processor.start()
         yield processor

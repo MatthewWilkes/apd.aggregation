@@ -23,7 +23,7 @@ db_session_var: ContextVar[Session] = ContextVar("db_session")
 
 @contextlib.contextmanager
 def with_database(uri: t.Optional[str] = None) -> t.Iterator[Session]:
-    """Given a URI, set up a DB connection, and return a Session as a context manager """
+    """Given a URI, set up a DB connection, and return a Session as a context manager"""
     if uri is None:
         uri = "postgresql+psycopg2://localhost/apd"
     engine = create_engine(uri)

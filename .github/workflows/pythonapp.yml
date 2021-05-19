@@ -50,7 +50,7 @@ jobs:
         pipenv run flake8 . --count --show-source --statistics
     - name: Lint with black
       run: |
-        pipenv run black --check
+        pipenv run black --check .
     - name: Lint with mypy
       run: |
         pipenv run mypy --namespace-packages -p apd.aggregation
