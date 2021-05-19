@@ -23,7 +23,10 @@ def upgrade():
         unique=False,
     )
     op.create_index(
-        op.f("ix_datapoints_sensor_name"), "datapoints", ["sensor_name"], unique=False,
+        op.f("ix_datapoints_sensor_name"),
+        "datapoints",
+        ["sensor_name"],
+        unique=False,
     )
 
 

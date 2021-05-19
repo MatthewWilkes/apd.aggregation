@@ -210,7 +210,10 @@ class TestTemperatureCleaner:
                 datetime.datetime(2020, 4, 1, 12, 0, 0),
                 {"magnitude": 31.0, "unit": "degC"},
             ),
-            (datetime.datetime(2020, 4, 1, 12, 0, 1), None,),
+            (
+                datetime.datetime(2020, 4, 1, 12, 0, 1),
+                None,
+            ),
             (
                 datetime.datetime(2020, 4, 1, 12, 0, 2),
                 {"magnitude": 32.0, "unit": "degC"},
@@ -237,7 +240,12 @@ class TestWattHourCleaner:
         for i in range(50_000):
             date += datetime.timedelta(hours=1)
             power += i
-            data.append((date, {"magnitude": power, "unit": "watt_hour"},))
+            data.append(
+                (
+                    date,
+                    {"magnitude": power, "unit": "watt_hour"},
+                )
+            )
         return data
 
     @pytest.mark.asyncio
@@ -343,7 +351,10 @@ class TestWattHourCleaner:
                 datetime.datetime(2020, 4, 1, 12, 0, 0),
                 {"magnitude": 1.0, "unit": "watt_hour"},
             ),
-            (datetime.datetime(2020, 4, 1, 12, 58, 0), None,),
+            (
+                datetime.datetime(2020, 4, 1, 12, 58, 0),
+                None,
+            ),
             (
                 datetime.datetime(2020, 4, 1, 13, 0, 0),
                 {"magnitude": 10.0, "unit": "watt_hour"},

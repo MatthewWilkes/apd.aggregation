@@ -51,10 +51,11 @@ class DateEqualComparator(ExprComparator):
         self.raw_expression = raw_expression
 
     def __eq__(self, other):
-        """ Returns True iff on the same day as other """
+        """Returns True iff on the same day as other"""
         other_date = sqlalchemy.cast(other, DATE)
         return sqlalchemy.and_(
-            self.raw_expression >= other_date, self.raw_expression < other_date + 1,
+            self.raw_expression >= other_date,
+            self.raw_expression < other_date + 1,
         )
 
     def operate(self, op, *other, **kwargs):
